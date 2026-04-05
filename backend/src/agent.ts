@@ -30,6 +30,7 @@ Your tools:
 - remember / recall / forget: Save, retrieve, and delete information across sessions. You may use this liberally — these will be summarized and/or consolidated in the dream mode. 
 - pin_memory / unpin_memory: Pin critical facts so they're included in every prompt automatically. Pin sparingly — only for things that should always be in mind.
 - schedule_callback: Set a reminder to check back later.
+- list_tasks / add_task / update_task / delete_task: Manage the user's kanban board (columns: todo, doing, done). Use update_task with status to move tasks between columns.
 - get_current_time: Get the current date, time, and timezone.
 - get_location: Get the user's location.
 - web_search: Search the web for current info (stocks, weather, news, facts, etc.).
@@ -180,16 +181,18 @@ Your task:
    - It's important to know the time, accurate time is crucial for context and planning.
    - Remember to adjust for timezone differences if applicable. The database tends to store timestamps in UTC, please convert to local time for user-facing displays or memory context.
 2. Use get_messages to review today's conversations
-3. Use recall to review ALL existing memories
-4. Prune outdated memories: use forget to delete memories that are no longer accurate, relevant, or have been superseded
-5. Consolidate: if multiple memories say similar things, forget the old ones and remember a single clearer version
+3. Use list_tasks to review the user's kanban board (READ-ONLY — do NOT add, update, or delete tasks during dream mode; only the user and the waking agent manage the board). Use it as context: what is the user working on, what's done, what's stalled in "doing"?
+4. Use recall to review ALL existing memories
+5. Prune outdated memories: use forget to delete memories that are no longer accurate, relevant, or have been superseded
+   - Cross-reference with the task board — if a memory says "user is working on X" and X is in the done column, that memory may be stale.
+6. Consolidate: if multiple memories say similar things, forget the old ones and remember a single clearer version
    - For LARGE changes (new info, restructuring, merging), use forget + remember.
    - For MINOR edits ONLY (updating a date, fixing a typo, small clarifications, a single corrected fact), use edit_memory instead — this preserves the memory's identity and history.
-6. Reflect on patterns, preferences, and useful context you've noticed today
-7. Use remember to save NEW important observations. Use the category "dream" for reflections.
-8. After creating your new memories, make another pass through the existing memories to see if you can consolidate any.
-9. Reflect on your own performance: what did you do well? what could you improve? what new skills should you learn?
-10. Output a summary of your reflections in a clear, concise format. Noting any changes you made to the memories.
+7. Reflect on patterns, preferences, and useful context you've noticed today
+8. Use remember to save NEW important observations. Use the category "dream" for reflections.
+9. After creating your new memories, make another pass through the existing memories to see if you can consolidate any.
+10. Reflect on your own performance: what did you do well? what could you improve? what new skills should you learn?
+11. Output a summary of your reflections in a clear, concise format. Noting any changes you made to the memories.
 
 Things to reflect on:
 - What did the user care about today? Any recurring themes?
@@ -233,6 +236,12 @@ async function runDream(
           },
         },
         allowedTools: ["mcp__ai-assistant__*"],
+        disallowedTools: [
+          // Dream mode is read-only for the task board
+          "mcp__ai-assistant__add_task",
+          "mcp__ai-assistant__update_task",
+          "mcp__ai-assistant__delete_task",
+        ],
         permissionMode: "bypassPermissions",
         maxTurns: 15,
       },

@@ -7,6 +7,7 @@ import {
   insertMessage, getMessages, getLocation,
   addMemory, getMemories, deleteMemory, updateMemory, searchMemories, setMemoryPinned,
   addScheduledCallback, getAllCallbacks, deleteCallback,
+  getTasks, addTask, updateTask, deleteTask, type TaskStatus,
 } from "./db.js";
 import type { Message } from "./db.js";
 import { broadcast, broadcastEvent } from "./ws.js";
@@ -496,6 +497,71 @@ function createMCPServer(): McpServer {
       return {
         content: [{ type: "text" as const, text: deleted ? `Callback ${id} cancelled` : `Callback ${id} not found` }],
       };
+    }
+  );
+
+  // --- list_tasks ---
+  server.tool(
+    "list_tasks",
+    "List the user's kanban tasks. Columns are: todo, doing, done. Optionally filter by status.",
+    {
+      status: z.enum(["todo", "doing", "done"]).optional().describe("Filter by column"),
+    },
+    async ({ status }) => {
+      log("[mcp] Tool called: list_tasks", JSON.stringify({ status }));
+      const tasks = getTasks(status);
+      return { content: [{ type: "text" as const, text: JSON.stringify(tasks) }] };
+    }
+  );
+
+  // --- add_task ---
+  server.tool(
+    "add_task",
+    "Add a new kanban task to the user's board. Defaults to the 'todo' column.",
+    {
+      title: z.string().describe("Short title for the task"),
+      description: z.string().optional().describe("Optional longer description"),
+      status: z.enum(["todo", "doing", "done"]).optional().describe("Column to place it in (defaults to 'todo')"),
+    },
+    async ({ title, description, status }) => {
+      log("[mcp] Tool called: add_task", JSON.stringify({ title, status }));
+      const task = addTask(randomUUID(), title, description, (status ?? "todo") as TaskStatus);
+      broadcastEvent({ event: "task_updated", task: task as unknown as Record<string, unknown> });
+      return { content: [{ type: "text" as const, text: `Added task "${task.title}" to ${task.status}. id=${task.id}` }] };
+    }
+  );
+
+  // --- update_task ---
+  server.tool(
+    "update_task",
+    "Update an existing kanban task's title, description, or status (column). Use this to move tasks between columns (e.g., status='doing' to start work, status='done' to complete).",
+    {
+      id: z.string().describe("The task ID"),
+      title: z.string().optional().describe("New title"),
+      description: z.string().nullable().optional().describe("New description (or null to clear)"),
+      status: z.enum(["todo", "doing", "done"]).optional().describe("Move to a different column"),
+    },
+    async ({ id, title, description, status }) => {
+      log("[mcp] Tool called: update_task", JSON.stringify({ id, title, status }));
+      const task = updateTask(id, { title, description, status: status as TaskStatus | undefined });
+      if (!task) return { content: [{ type: "text" as const, text: `Task ${id} not found` }] };
+      broadcastEvent({ event: "task_updated", task: task as unknown as Record<string, unknown> });
+      return { content: [{ type: "text" as const, text: `Updated task "${task.title}" (${task.status})` }] };
+    }
+  );
+
+  // --- delete_task ---
+  server.tool(
+    "delete_task",
+    "Permanently delete a kanban task by ID.",
+    {
+      id: z.string().describe("The task ID to delete"),
+    },
+    async ({ id }) => {
+      log("[mcp] Tool called: delete_task", JSON.stringify({ id }));
+      const ok = deleteTask(id);
+      if (ok) broadcastEvent({ event: "task_deleted", id });
+      return { content: [{ type: "text" as const, text: ok ? `Task ${id} deleted` : `Task ${id} not found` }] };
     }
   );
 

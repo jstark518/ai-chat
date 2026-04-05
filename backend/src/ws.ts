@@ -25,7 +25,9 @@ export type WSEvent =
   | { event: "read"; messageIds: string[] }
   | { event: "device_control"; deviceId: string; action: string; params: Record<string, unknown> }
   | { event: "device_state_update"; deviceId: string; state: Record<string, unknown> }
-  | { event: "request_location"; requestId: string };
+  | { event: "request_location"; requestId: string }
+  | { event: "task_updated"; task: Record<string, unknown> }
+  | { event: "task_deleted"; id: string };
 
 export function broadcastEvent(event: WSEvent) {
   const data = JSON.stringify(event);

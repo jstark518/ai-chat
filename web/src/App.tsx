@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useSmartHome } from "./hooks/useSmartHome";
 import { SmartHomeTab } from "./components/SmartHomeTab";
 import { AgentDebugTab } from "./components/AgentDebugTab";
+import { ChatTab } from "./components/ChatTab";
 
 const TABS = [
+  { id: "chat", label: "Chat", icon: "💬" },
   { id: "agent", label: "Agent Debug", icon: "🤖" },
   { id: "smarthome", label: "Smart Home", icon: "🏠" },
 ] as const;
@@ -11,16 +13,8 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabId>("agent");
+  const [activeTab, setActiveTab] = useState<TabId>("chat");
   const smartHome = useSmartHome();
-
-  if (smartHome.loading || !smartHome.state) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400 text-lg">Loading...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen">
@@ -47,8 +41,13 @@ export default function App() {
         </nav>
       </header>
       <main className="p-6">
+        {activeTab === "chat" && <ChatTab />}
         {activeTab === "smarthome" && (
-          <SmartHomeTab {...smartHome} state={smartHome.state} />
+          smartHome.loading || !smartHome.state ? (
+            <p className="text-gray-400 text-lg text-center py-12">Loading smart home...</p>
+          ) : (
+            <SmartHomeTab {...smartHome} state={smartHome.state} />
+          )
         )}
         {activeTab === "agent" && <AgentDebugTab />}
       </main>

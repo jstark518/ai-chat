@@ -11,6 +11,7 @@ import smarthome from "./routes/smarthome.js";
 import goveeRoutes from "./routes/govee.js";
 import agentRoutes from "./routes/agent.js";
 import kasaRoutes from "./routes/kasa.js";
+import tasksRoutes from "./routes/tasks.js";
 import { addClient, removeClient } from "./ws.js";
 import { startAgentLoop, nudge as nudgeAgent } from "./agent.js";
 import { initMCP, resolveUserResponse, resolveLocationRequest } from "./mcp.js";
@@ -81,6 +82,7 @@ app.route("/", smarthome);
 app.route("/", goveeRoutes);
 app.route("/", agentRoutes);
 app.route("/", kasaRoutes);
+app.route("/", tasksRoutes);
 
 // Health check
 app.get("/health", (c) => c.json({ ok: true }));

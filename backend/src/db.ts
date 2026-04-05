@@ -111,6 +111,16 @@ db.exec(`
     last_synced TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','doing','done')),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS govee_devices (
     device TEXT NOT NULL,
     sku TEXT NOT NULL,
@@ -910,6 +920,94 @@ export function getToolCalls(limit = 50): ToolCall[] {
 
 export function clearToolCalls(): void {
   db.prepare("DELETE FROM tool_calls").run();
+}
+
+// ============================================================
+// Tasks (Kanban)
+// ============================================================
+
+export type TaskStatus = "todo" | "doing" | "done";
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface RawTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapTask(row: RawTask): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function getTasks(status?: TaskStatus): Task[] {
+  if (status) {
+    return (db.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY sort_order ASC, created_at ASC").all(status) as RawTask[]).map(mapTask);
+  }
+  return (db.prepare("SELECT * FROM tasks ORDER BY status, sort_order ASC, created_at ASC").all() as RawTask[]).map(mapTask);
+}
+
+export function getTask(id: string): Task | null {
+  const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as RawTask | undefined;
+  return row ? mapTask(row) : null;
+}
+
+export function addTask(id: string, title: string, description?: string, status: TaskStatus = "todo"): Task {
+  const now = new Date().toISOString();
+  // Put new tasks at the end of the column
+  const maxOrder = (db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS m FROM tasks WHERE status = ?").get(status) as { m: number }).m;
+  const sortOrder = maxOrder + 1;
+  db.prepare(
+    "INSERT INTO tasks (id, title, description, status, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(id, title, description ?? null, status, sortOrder, now, now);
+  return { id, title, description: description ?? null, status, sortOrder, createdAt: now, updatedAt: now };
+}
+
+export function updateTask(id: string, data: { title?: string; description?: string | null; status?: TaskStatus; sortOrder?: number }): Task | null {
+  const existing = getTask(id);
+  if (!existing) return null;
+  const now = new Date().toISOString();
+  // If status is changing and sortOrder not provided, append to the new column
+  let newSortOrder = data.sortOrder ?? existing.sortOrder;
+  if (data.status && data.status !== existing.status && data.sortOrder === undefined) {
+    const maxOrder = (db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS m FROM tasks WHERE status = ?").get(data.status) as { m: number }).m;
+    newSortOrder = maxOrder + 1;
+  }
+  db.prepare(
+    "UPDATE tasks SET title = ?, description = ?, status = ?, sort_order = ?, updated_at = ? WHERE id = ?"
+  ).run(
+    data.title ?? existing.title,
+    data.description !== undefined ? data.description : existing.description,
+    data.status ?? existing.status,
+    newSortOrder,
+    now,
+    id
+  );
+  return getTask(id);
+}
+
+export function deleteTask(id: string): boolean {
+  return db.prepare("DELETE FROM tasks WHERE id = ?").run(id).changes > 0;
 }
 
 export default db;

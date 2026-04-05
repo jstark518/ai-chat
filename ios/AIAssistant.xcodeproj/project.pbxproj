@@ -25,6 +25,9 @@
 		A1000011000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011000000000000000F /* SettingsView.swift */; };
 		A1000012000000000000000F /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012000000000000000F /* NotificationManager.swift */; };
 		A1000013000000000000000F /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013000000000000000F /* Config.swift */; };
+		A1000014000000000000000F /* Task.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014000000000000000F /* Task.swift */; };
+		A1000015000000000000000F /* TaskService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015000000000000000F /* TaskService.swift */; };
+		A1000016000000000000000F /* KanbanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000016000000000000000F /* KanbanView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +50,9 @@
 		A2000011000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A2000012000000000000000F /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		A2000013000000000000000F /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		A2000014000000000000000F /* Task.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Task.swift; sourceTree = "<group>"; };
+		A2000015000000000000000F /* TaskService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskService.swift; sourceTree = "<group>"; };
+		A2000016000000000000000F /* KanbanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanbanView.swift; sourceTree = "<group>"; };
 		A30000010000000000000001 /* AIAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -86,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000020000000000000002 /* Message.swift */,
+				A2000014000000000000000F /* Task.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -103,6 +110,7 @@
 				A200000F000000000000000F /* LinkPreviewView.swift */,
 				A2000010000000000000000F /* MessageGrouping.swift */,
 				A2000011000000000000000F /* SettingsView.swift */,
+				A2000016000000000000000F /* KanbanView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -115,6 +123,7 @@
 				A20000070000000000000007 /* LocationService.swift */,
 				A200000B000000000000000B /* HapticManager.swift */,
 				A2000012000000000000000F /* NotificationManager.swift */,
+				A2000015000000000000000F /* TaskService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -213,6 +222,9 @@
 				A1000011000000000000000F /* SettingsView.swift in Sources */,
 				A1000012000000000000000F /* NotificationManager.swift in Sources */,
 				A1000013000000000000000F /* Config.swift in Sources */,
+				A1000014000000000000000F /* Task.swift in Sources */,
+				A1000015000000000000000F /* TaskService.swift in Sources */,
+				A1000016000000000000000F /* KanbanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
