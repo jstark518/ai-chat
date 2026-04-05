@@ -1,0 +1,32 @@
+{
+  "name": "ai-assistant",
+  "version": "1.0.0",
+  "description": "Proactive AI virtual assistant",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n backend,web -c blue,magenta \"nodemon --watch backend/src --ext ts --delay 10 --exec 'tsx backend/src/index.ts'\" \"npm --prefix web run dev\"",
+    "dev:backend": "nodemon --watch backend/src --ext ts --delay 10 --exec 'tsx backend/src/index.ts'",
+    "dev:web": "npm --prefix web run dev",
+    "build": "tsc",
+    "start": "node dist/backend/src/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.91",
+    "@hono/node-server": "^1.13.0",
+    "@hono/node-ws": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^11.0.0",
+    "hono": "^4.6.0",
+    "tplink-smarthome-api": "^5.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.3"
+  },
+  "private": true
+}

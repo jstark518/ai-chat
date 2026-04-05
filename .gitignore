@@ -1,0 +1,48 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+web/node_modules
+
+# Build output
+/tmp
+/out-tsc
+/dist
+web/dist
+
+# IDE
+.vscode/*
+.idea/*
+!.idea/.gitignore
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# iOS
+# Private config files (contain personal backend URLs)
+ios/AIAssistant/Config.swift
+# Xcode
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/**/DerivedData/
+ios/**/build/
+ios/**/*.xcworkspace/xcuserdata/
+
+# Environment + secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+
+# Database backups
+data/assistant.db.backup-*

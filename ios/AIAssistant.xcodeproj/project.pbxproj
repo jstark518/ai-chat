@@ -1,0 +1,366 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000010000000000000001 /* AIAssistantApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* AIAssistantApp.swift */; };
+		A10000020000000000000002 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000020000000000000002 /* Message.swift */; };
+		A10000030000000000000003 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000030000000000000003 /* ChatView.swift */; };
+		A10000040000000000000004 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000040000000000000004 /* MessageBubbleView.swift */; };
+		A10000050000000000000005 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000050000000000000005 /* APIService.swift */; };
+		A10000060000000000000006 /* WebSocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000060000000000000006 /* WebSocketService.swift */; };
+		A10000070000000000000007 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000070000000000000007 /* LocationService.swift */; };
+		A10000080000000000000008 /* TypingIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000090000000000000009 /* TypingIndicatorView.swift */; };
+		A10000090000000000000009 /* SmartHomeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000A000000000000000A /* SmartHomeCardView.swift */; };
+		A100000B000000000000000B /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000B000000000000000B /* HapticManager.swift */; };
+		A100000C000000000000000C /* ConnectionStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C000000000000000C /* ConnectionStatusView.swift */; };
+		A100000D000000000000000D /* ComposeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D000000000000000D /* ComposeBar.swift */; };
+		A100000E000000000000000E /* QuickActionsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E000000000000000E /* QuickActionsBar.swift */; };
+		A100000F000000000000000F /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F000000000000000F /* LinkPreviewView.swift */; };
+		A1000010000000000000000F /* MessageGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010000000000000000F /* MessageGrouping.swift */; };
+		A1000011000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011000000000000000F /* SettingsView.swift */; };
+		A1000012000000000000000F /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012000000000000000F /* NotificationManager.swift */; };
+		A1000013000000000000000F /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013000000000000000F /* Config.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000010000000000000001 /* AIAssistantApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantApp.swift; sourceTree = "<group>"; };
+		A20000020000000000000002 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
+		A20000030000000000000003 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		A20000040000000000000004 /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
+		A20000050000000000000005 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
+		A20000060000000000000006 /* WebSocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketService.swift; sourceTree = "<group>"; };
+		A20000070000000000000007 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		A20000080000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000090000000000000009 /* TypingIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorView.swift; sourceTree = "<group>"; };
+		A200000A000000000000000A /* SmartHomeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartHomeCardView.swift; sourceTree = "<group>"; };
+		A200000B000000000000000B /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
+		A200000C000000000000000C /* ConnectionStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusView.swift; sourceTree = "<group>"; };
+		A200000D000000000000000D /* ComposeBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeBar.swift; sourceTree = "<group>"; };
+		A200000E000000000000000E /* QuickActionsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsBar.swift; sourceTree = "<group>"; };
+		A200000F000000000000000F /* LinkPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewView.swift; sourceTree = "<group>"; };
+		A2000010000000000000000F /* MessageGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageGrouping.swift; sourceTree = "<group>"; };
+		A2000011000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A2000012000000000000000F /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		A2000013000000000000000F /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		A30000010000000000000001 /* AIAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A50000010000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A50000020000000000000002 /* AIAssistant */,
+				A50000060000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A50000020000000000000002 /* AIAssistant */ = {
+			isa = PBXGroup;
+			children = (
+				A20000010000000000000001 /* AIAssistantApp.swift */,
+				A2000013000000000000000F /* Config.swift */,
+				A20000080000000000000008 /* Info.plist */,
+				A50000030000000000000003 /* Models */,
+				A50000040000000000000004 /* Views */,
+				A50000050000000000000005 /* Services */,
+			);
+			path = AIAssistant;
+			sourceTree = "<group>";
+		};
+		A50000030000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A20000020000000000000002 /* Message.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A50000040000000000000004 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A20000030000000000000003 /* ChatView.swift */,
+				A20000040000000000000004 /* MessageBubbleView.swift */,
+				A20000090000000000000009 /* TypingIndicatorView.swift */,
+				A200000A000000000000000A /* SmartHomeCardView.swift */,
+				A200000C000000000000000C /* ConnectionStatusView.swift */,
+				A200000D000000000000000D /* ComposeBar.swift */,
+				A200000E000000000000000E /* QuickActionsBar.swift */,
+				A200000F000000000000000F /* LinkPreviewView.swift */,
+				A2000010000000000000000F /* MessageGrouping.swift */,
+				A2000011000000000000000F /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A50000050000000000000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A20000050000000000000005 /* APIService.swift */,
+				A20000060000000000000006 /* WebSocketService.swift */,
+				A20000070000000000000007 /* LocationService.swift */,
+				A200000B000000000000000B /* HapticManager.swift */,
+				A2000012000000000000000F /* NotificationManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A50000060000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A30000010000000000000001 /* AIAssistant.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A60000010000000000000001 /* AIAssistant */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000030000000000000003 /* Build configuration list for PBXNativeTarget "AIAssistant" */;
+			buildPhases = (
+				A70000010000000000000001 /* Sources */,
+				A40000010000000000000001 /* Frameworks */,
+				A90000010000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AIAssistant;
+			productName = AIAssistant;
+			productReference = A30000010000000000000001 /* AIAssistant.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A60000020000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A60000010000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A80000010000000000000001 /* Build configuration list for PBXProject "AIAssistant" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A50000010000000000000001;
+			productRefGroup = A50000060000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A60000010000000000000001 /* AIAssistant */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A90000010000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A70000010000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000010000000000000001 /* AIAssistantApp.swift in Sources */,
+				A10000020000000000000002 /* Message.swift in Sources */,
+				A10000030000000000000003 /* ChatView.swift in Sources */,
+				A10000040000000000000004 /* MessageBubbleView.swift in Sources */,
+				A10000050000000000000005 /* APIService.swift in Sources */,
+				A10000060000000000000006 /* WebSocketService.swift in Sources */,
+				A10000070000000000000007 /* LocationService.swift in Sources */,
+				A10000080000000000000008 /* TypingIndicatorView.swift in Sources */,
+				A10000090000000000000009 /* SmartHomeCardView.swift in Sources */,
+				A100000B000000000000000B /* HapticManager.swift in Sources */,
+				A100000C000000000000000C /* ConnectionStatusView.swift in Sources */,
+				A100000D000000000000000D /* ComposeBar.swift in Sources */,
+				A100000E000000000000000E /* QuickActionsBar.swift in Sources */,
+				A100000F000000000000000F /* LinkPreviewView.swift in Sources */,
+				A1000010000000000000000F /* MessageGrouping.swift in Sources */,
+				A1000011000000000000000F /* SettingsView.swift in Sources */,
+				A1000012000000000000000F /* NotificationManager.swift in Sources */,
+				A1000013000000000000000F /* Config.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B10000010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B10000020000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B20000010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QR2NAM9QBN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AIAssistant/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AI Assistant";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "The AI assistant uses your location to provide contextual help and suggestions.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stark.aiassistant.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B20000020000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QR2NAM9QBN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AIAssistant/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "AI Assistant";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "The AI assistant uses your location to provide contextual help and suggestions.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stark.aiassistant.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A80000010000000000000001 /* Build configuration list for PBXProject "AIAssistant" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000010000000000000001 /* Debug */,
+				B10000020000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000030000000000000003 /* Build configuration list for PBXNativeTarget "AIAssistant" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B20000010000000000000001 /* Debug */,
+				B20000020000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A60000020000000000000002 /* Project object */;
+}

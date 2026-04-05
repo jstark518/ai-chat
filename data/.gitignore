@@ -1,0 +1,3 @@
+# Runtime data — all contents are ignored except this .gitignore
+*
+!.gitignore
