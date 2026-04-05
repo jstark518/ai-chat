@@ -4,6 +4,11 @@ A proactive virtual assistant that runs on an interval, checking in with you via
 
 Think of it as a smart home companion that actually starts conversations.
 
+<p align="center">
+  <img src="docs/ios-mockup.svg" alt="Rough mockup of the iOS app" width="320">
+  <br><em>Rough mockup of the iOS app</em>
+</p>
+
 ## What it does
 
 - **Runs on a schedule.** Every few minutes the agent wakes up with a prompt like "Anything worth doing?" and decides whether to act, ask a question, or stay quiet.

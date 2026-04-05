@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 860" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="userBubble" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0A84FF"/>
+      <stop offset="1" stop-color="#0066E0"/>
+    </linearGradient>
+    <linearGradient id="phoneBezel" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#1c1c1e"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect x="10" y="10" width="400" height="840" rx="48" ry="48" fill="url(#phoneBezel)"/>
+  <rect x="18" y="18" width="384" height="824" rx="42" ry="42" fill="#000"/>
+
+  <!-- Screen -->
+  <clipPath id="screen">
+    <rect x="22" y="22" width="376" height="816" rx="38" ry="38"/>
+  </clipPath>
+  <g clip-path="url(#screen)">
+    <rect x="22" y="22" width="376" height="816" fill="#f2f2f7"/>
+
+    <!-- Status bar -->
+    <rect x="22" y="22" width="376" height="44" fill="#f2f2f7"/>
+    <text x="50" y="49" font-size="15" font-weight="600" fill="#000">9:41</text>
+    <!-- Dynamic island -->
+    <rect x="160" y="32" width="100" height="32" rx="16" fill="#000"/>
+    <!-- Status icons -->
+    <g fill="#000">
+      <!-- Signal -->
+      <rect x="328" y="43" width="3" height="5" rx="0.5"/>
+      <rect x="333" y="40" width="3" height="8" rx="0.5"/>
+      <rect x="338" y="37" width="3" height="11" rx="0.5"/>
+      <rect x="343" y="34" width="3" height="14" rx="0.5"/>
+      <!-- WiFi -->
+      <path d="M 351 43 Q 356 38 361 43" stroke="#000" stroke-width="2" fill="none"/>
+      <path d="M 353 45 Q 356 42 359 45" stroke="#000" stroke-width="2" fill="none"/>
+      <circle cx="356" cy="47" r="1"/>
+      <!-- Battery -->
+      <rect x="367" y="38" width="20" height="10" rx="2" fill="none" stroke="#000" stroke-width="1"/>
+      <rect x="368" y="39" width="16" height="8" rx="1" fill="#000"/>
+      <rect x="388" y="41" width="1.5" height="4" rx="0.5"/>
+    </g>
+
+    <!-- Navigation bar -->
+    <rect x="22" y="66" width="376" height="54" fill="#f2f2f7"/>
+    <text x="38" y="100" font-size="22" font-weight="700" fill="#000">Assistant</text>
+    <!-- Connection dot -->
+    <circle cx="155" cy="93" r="4" fill="#34C759"/>
+    <text x="164" y="97" font-size="12" fill="#8e8e93">Connected</text>
+    <!-- Nav buttons -->
+    <g fill="#0A84FF">
+      <!-- Search -->
+      <circle cx="330" cy="93" r="8" fill="none" stroke="#0A84FF" stroke-width="1.8"/>
+      <line x1="336" y1="99" x2="341" y2="104" stroke="#0A84FF" stroke-width="1.8" stroke-linecap="round"/>
+      <!-- Gear -->
+      <g transform="translate(368,93)" stroke="#0A84FF" stroke-width="1.8" fill="none">
+        <circle r="4"/>
+        <path d="M 0 -9 L 0 -6 M 0 6 L 0 9 M -9 0 L -6 0 M 6 0 L 9 0 M -6.4 -6.4 L -4.2 -4.2 M 4.2 4.2 L 6.4 6.4 M -6.4 6.4 L -4.2 4.2 M 4.2 -4.2 L 6.4 -6.4"/>
+      </g>
+    </g>
+    <line x1="22" y1="120" x2="398" y2="120" stroke="#d1d1d6" stroke-width="0.5"/>
+
+    <!-- MESSAGES -->
+
+    <!-- Date separator -->
+    <text x="210" y="144" font-size="11" font-weight="600" fill="#8e8e93" text-anchor="middle">TODAY 9:12 AM</text>
+
+    <!-- Assistant bubble: greeting -->
+    <g filter="url(#shadow)">
+      <path d="M 40 158 Q 40 152 46 152 L 258 152 Q 264 152 264 158 L 264 192 Q 264 198 258 198 L 52 198 Q 46 198 46 198 Q 40 198 38 203 Q 40 198 40 192 Z"
+            fill="#fff"/>
+    </g>
+    <text x="52" y="175" font-size="14" fill="#000">Good morning! The coffee maker</text>
+    <text x="52" y="191" font-size="14" fill="#000">is on — ready in ~4 minutes.</text>
+
+    <!-- Smart Home Card (assistant message) -->
+    <g filter="url(#shadow)">
+      <rect x="40" y="214" width="288" height="186" rx="16" fill="#fff"/>
+    </g>
+    <text x="56" y="238" font-size="13" font-weight="600" fill="#8e8e93">LIVING ROOM</text>
+    <line x1="56" y1="248" x2="312" y2="248" stroke="#e5e5ea" stroke-width="0.5"/>
+
+    <!-- Light 1 -->
+    <g>
+      <circle cx="68" cy="270" r="10" fill="#FFD60A"/>
+      <path d="M 68 262 L 68 265 M 62 270 L 64 270 M 72 270 L 74 270 M 64 266 L 65 267 M 71 267 L 72 266" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+      <text x="86" y="267" font-size="13" font-weight="500" fill="#000">Floor Lamp</text>
+      <text x="86" y="281" font-size="11" fill="#8e8e93">On · 80%</text>
+      <!-- Toggle ON -->
+      <rect x="270" y="262" width="36" height="22" rx="11" fill="#34C759"/>
+      <circle cx="297" cy="273" r="9" fill="#fff"/>
+    </g>
+
+    <!-- Light 2 -->
+    <g>
+      <circle cx="68" cy="304" r="10" fill="#e5e5ea"/>
+      <path d="M 68 296 L 68 299 M 62 304 L 64 304 M 72 304 L 74 304" stroke="#8e8e93" stroke-width="1.2" stroke-linecap="round"/>
+      <text x="86" y="301" font-size="13" font-weight="500" fill="#000">Overhead Light</text>
+      <text x="86" y="315" font-size="11" fill="#8e8e93">Off</text>
+      <!-- Toggle OFF -->
+      <rect x="270" y="296" width="36" height="22" rx="11" fill="#e5e5ea"/>
+      <circle cx="279" cy="307" r="9" fill="#fff"/>
+    </g>
+
+    <!-- Light 3 (Govee) -->
+    <g>
+      <circle cx="68" cy="338" r="10" fill="#FF375F"/>
+      <path d="M 68 330 L 68 333 M 62 338 L 64 338 M 72 338 L 74 338" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+      <text x="86" y="335" font-size="13" font-weight="500" fill="#000">TV Backlight</text>
+      <text x="86" y="349" font-size="11" fill="#8e8e93">On · 60% · Govee</text>
+      <rect x="270" y="330" width="36" height="22" rx="11" fill="#34C759"/>
+      <circle cx="297" cy="341" r="9" fill="#fff"/>
+    </g>
+
+    <!-- Lock -->
+    <g>
+      <rect x="58" y="362" width="20" height="20" rx="4" fill="#30D158"/>
+      <rect x="63" y="357" width="10" height="10" rx="5" fill="none" stroke="#30D158" stroke-width="2"/>
+      <text x="86" y="369" font-size="13" font-weight="500" fill="#000">Front Door</text>
+      <text x="86" y="383" font-size="11" fill="#8e8e93">Locked</text>
+      <rect x="270" y="364" width="36" height="22" rx="11" fill="#34C759"/>
+      <circle cx="297" cy="375" r="9" fill="#fff"/>
+    </g>
+
+    <!-- User message bubble -->
+    <g filter="url(#shadow)">
+      <path d="M 380 418 Q 380 412 374 412 L 192 412 Q 186 412 186 418 L 186 452 Q 186 458 192 458 L 374 458 Q 380 458 380 458 Q 380 458 382 463 Q 380 458 380 452 Z"
+            fill="url(#userBubble)"/>
+    </g>
+    <text x="200" y="435" font-size="14" fill="#fff">Turn off the overhead light</text>
+    <text x="200" y="451" font-size="14" fill="#fff">and dim the lamp to 40%</text>
+    <text x="340" y="474" font-size="10" fill="#8e8e93">Read 9:14 AM</text>
+
+    <!-- Typing indicator -->
+    <g filter="url(#shadow)">
+      <rect x="40" y="486" width="64" height="32" rx="16" fill="#fff"/>
+      <circle cx="56" cy="502" r="3.5" fill="#8e8e93" opacity="0.4"/>
+      <circle cx="72" cy="502" r="3.5" fill="#8e8e93" opacity="0.7"/>
+      <circle cx="88" cy="502" r="3.5" fill="#8e8e93"/>
+    </g>
+
+    <!-- Assistant bubble: confirmation -->
+    <g filter="url(#shadow)">
+      <path d="M 40 534 Q 40 528 46 528 L 246 528 Q 252 528 252 534 L 252 568 Q 252 574 246 574 L 52 574 Q 46 574 46 574 Q 40 574 38 579 Q 40 574 40 568 Z"
+            fill="#fff"/>
+    </g>
+    <text x="52" y="551" font-size="14" fill="#000">Done — overhead off, lamp at</text>
+    <text x="52" y="567" font-size="14" fill="#000">40%. Anything else?</text>
+
+    <!-- Multiple choice question -->
+    <g filter="url(#shadow)">
+      <rect x="40" y="590" width="288" height="112" rx="16" fill="#fff"/>
+    </g>
+    <text x="56" y="612" font-size="13" font-weight="600" fill="#000">You've been working 2h straight.</text>
+    <text x="56" y="628" font-size="13" font-weight="600" fill="#000">Want a break reminder?</text>
+    <!-- Buttons -->
+    <g>
+      <rect x="56" y="640" width="120" height="28" rx="14" fill="#0A84FF"/>
+      <text x="116" y="659" font-size="12" font-weight="600" fill="#fff" text-anchor="middle">In 15 min</text>
+      <rect x="184" y="640" width="120" height="28" rx="14" fill="#0A84FF"/>
+      <text x="244" y="659" font-size="12" font-weight="600" fill="#fff" text-anchor="middle">In 30 min</text>
+      <rect x="56" y="672" width="248" height="22" rx="11" fill="#f2f2f7" stroke="#d1d1d6" stroke-width="0.5"/>
+      <text x="180" y="688" font-size="12" fill="#8e8e93" text-anchor="middle">No thanks</text>
+    </g>
+
+    <!-- Quick actions bar -->
+    <rect x="22" y="712" width="376" height="44" fill="#f2f2f7"/>
+    <g>
+      <rect x="38" y="722" width="84" height="24" rx="12" fill="#fff" stroke="#d1d1d6" stroke-width="0.5"/>
+      <text x="80" y="738" font-size="11" fill="#0A84FF" text-anchor="middle">🏠 Status</text>
+      <rect x="128" y="722" width="88" height="24" rx="12" fill="#fff" stroke="#d1d1d6" stroke-width="0.5"/>
+      <text x="172" y="738" font-size="11" fill="#0A84FF" text-anchor="middle">💡 Lights off</text>
+      <rect x="222" y="722" width="90" height="24" rx="12" fill="#fff" stroke="#d1d1d6" stroke-width="0.5"/>
+      <text x="267" y="738" font-size="11" fill="#0A84FF" text-anchor="middle">🌡️ Thermostat</text>
+      <rect x="318" y="722" width="62" height="24" rx="12" fill="#fff" stroke="#d1d1d6" stroke-width="0.5"/>
+      <text x="349" y="738" font-size="11" fill="#0A84FF" text-anchor="middle">🔒 Lock</text>
+    </g>
+
+    <!-- Compose bar -->
+    <line x1="22" y1="756" x2="398" y2="756" stroke="#d1d1d6" stroke-width="0.5"/>
+    <rect x="22" y="756" width="376" height="62" fill="#f2f2f7"/>
+    <rect x="38" y="768" width="292" height="38" rx="19" fill="#fff" stroke="#d1d1d6" stroke-width="0.5"/>
+    <text x="52" y="791" font-size="14" fill="#c7c7cc">Message…</text>
+    <!-- Send button -->
+    <circle cx="358" cy="787" r="18" fill="#0A84FF"/>
+    <path d="M 351 787 L 365 787 M 360 782 L 365 787 L 360 792" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+    <!-- Home indicator -->
+    <rect x="150" y="828" width="120" height="5" rx="2.5" fill="#000"/>
+  </g>
+</svg>
