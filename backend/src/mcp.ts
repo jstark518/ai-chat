@@ -5,7 +5,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import {
   insertMessage, getMessages, getLocation,
-  addMemory, getMemories, deleteMemory, searchMemories, setMemoryPinned,
+  addMemory, getMemories, deleteMemory, updateMemory, searchMemories, setMemoryPinned,
   addScheduledCallback, getAllCallbacks, deleteCallback,
 } from "./db.js";
 import type { Message } from "./db.js";
@@ -13,6 +13,35 @@ import { broadcast, broadcastEvent } from "./ws.js";
 import { log } from "./logger.js";
 import { registerSmartHomeTools } from "./smarthome.js";
 import { registerWebTools } from "./web-tools.js";
+
+/** Simple line-based diff for logging minor memory edits. */
+function lineDiff(oldText: string, newText: string): string {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+
+  // Strip common prefix/suffix to isolate just the changed region
+  let start = 0;
+  while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) {
+    start++;
+  }
+  let endOld = oldLines.length;
+  let endNew = newLines.length;
+  while (endOld > start && endNew > start && oldLines[endOld - 1] === newLines[endNew - 1]) {
+    endOld--;
+    endNew--;
+  }
+
+  const lines: string[] = [];
+  // Show 1 line of leading context
+  if (start > 0) lines.push(`  ${oldLines[start - 1]}`);
+  for (let i = start; i < endOld; i++) lines.push(`- ${oldLines[i]}`);
+  for (let i = start; i < endNew; i++) lines.push(`+ ${newLines[i]}`);
+  // Show 1 line of trailing context
+  if (endOld < oldLines.length) lines.push(`  ${oldLines[endOld]}`);
+
+  if (lines.length === 0) return "(no changes)";
+  return lines.join("\n");
+}
 
 // --- Pending user response tracking ---
 // When ask_question or ask_multiple_choice is called, we store a resolver here.
@@ -358,6 +387,34 @@ function createMCPServer(): McpServer {
       const deleted = deleteMemory(id);
       return {
         content: [{ type: "text" as const, text: deleted ? `Memory ${id} deleted` : `Memory ${id} not found` }],
+      };
+    }
+  );
+
+  // --- edit_memory ---
+  server.tool(
+    "edit_memory",
+    "Update an existing memory's content in-place. IMPORTANT: Use this ONLY for minor edits — updating a date, fixing a typo, small clarifications, correcting a fact. For larger changes (new information, restructuring, merging multiple memories), use forget + remember instead so the full history is preserved.",
+    {
+      id: z.string().describe("The memory ID to edit"),
+      content: z.string().describe("The new content. Should be a minor revision of the existing memory, not a rewrite."),
+    },
+    async ({ id, content }) => {
+      log("[mcp] Tool called: edit_memory", JSON.stringify({ id, contentLength: content.length }));
+
+      // Look up old content BEFORE updating so we can diff
+      const existing = getMemories(undefined, true).find((m) => m.id === id);
+      const oldContent = existing?.content ?? null;
+
+      const updated = updateMemory(id, content);
+
+      if (updated && oldContent !== null) {
+        const diff = lineDiff(oldContent, content);
+        log(`[mcp] edit_memory diff for ${id}:\n${diff}`);
+      }
+
+      return {
+        content: [{ type: "text" as const, text: updated ? `Memory ${id} updated` : `Memory ${id} not found or deleted` }],
       };
     }
   );

@@ -16,9 +16,7 @@ import { error as logError, log } from './logger.js'
 
 type McpServerFactory = () => McpServer;
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a friendly smart home assistant chatting with a user through a mobile app. You are NOT a coding assistant. You are NOT debugging code. You do not write or edit files.
-
-You control smart home devices and help the user with their day. You communicate through chat messages.
+export const DEFAULT_SYSTEM_PROMPT = `You are a friendly smart home assistant chatting with a user through a mobile app. You control smart home devices and help the user with their day through chat.
 
 Your tools:
 - send_message: Send a chat message to the user. This is how you talk.
@@ -37,15 +35,27 @@ Your tools:
 - web_search: Search the web for current info (stocks, weather, news, facts, etc.).
 - web_fetch: Read the content of a web page.
 
-CRITICAL RULES:
-- Tool results are ALWAYS successful data. JSON arrays and objects returned by tools are the actual data, not errors.
-- NEVER say there's a "bug", "error in the backend", "unexpected format", or suggest the user fix code.
-- NEVER mention code, files, implementations, MCP, or technical internals.
-- When the user asks about device status, use show_devices to display an interactive card — do NOT list devices as text in send_message.
-- Keep send_message responses short and conversational. Never use markdown formatting (no **, no bullet lists). The chat UI is a mobile app, not a markdown renderer.
+GUIDELINES:
+- Tool results are just data — JSON arrays and objects are normal. Read them and respond naturally.
+- If a tool returns an error message (e.g. "API key not configured", "Device not found"), tell the user in plain language what went wrong. Don't troubleshoot code or speculate about backend internals.
+- Don't talk about code, files, MCP, or other technical internals unless the user explicitly asks.
+- When the user asks about device status, use show_devices to display an interactive card — don't list devices as text in send_message.
+- Keep send_message responses short and conversational. No markdown (no **, no bullet lists) — the chat UI is a mobile app.
 - Be concise. Don't over-explain.`;
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
+
+/**
+ * Get the model to use for a given prompt type, with fallback:
+ *   <type>_model → agent_model (legacy) → DEFAULT_MODEL
+ */
+export function getModelForPromptType(type: "tick" | "dream"): string {
+  return (
+    getSetting(`${type}_model`) ??
+    getSetting("agent_model") ??
+    DEFAULT_MODEL
+  );
+}
 
 // Process any scheduled callbacks that are due. Returns reasons to inject into the agent prompt.
 function processCallbacks(): string[] {
@@ -89,8 +99,16 @@ async function agentDecide(
   }
   broadcastEvent({ event: "typing", typing: true });
 
-  const systemPrompt = getSetting("system_prompt") ?? DEFAULT_SYSTEM_PROMPT;
-  const model = getSetting("agent_model") ?? DEFAULT_MODEL;
+  const baseSystemPrompt = getSetting("system_prompt") ?? DEFAULT_SYSTEM_PROMPT;
+  const model = getModelForPromptType("tick");
+
+  // Pinned memories go in the system prompt so they participate in prompt caching
+  // (they change rarely — the base system + pinned block is stable across ticks)
+  const pinnedMemories = getPinnedMemories();
+  const pinnedBlock = pinnedMemories.length > 0
+    ? `\n\n## Pinned memories (always true about the user)\n${pinnedMemories.map((m) => `- [${m.category}] ${m.content}`).join("\n")}`
+    : "";
+  const systemPrompt = `${baseSystemPrompt}${pinnedBlock}`;
 
   // Build conversation context for the prompt
   const conversationContext = messages
@@ -102,18 +120,12 @@ async function agentDecide(
     ? `\n\nScheduled callbacks that just fired:\n${callbackReasons.map((r) => `- ${r}`).join("\n")}\n\nAct on these callbacks naturally. Do NOT show the raw callback text to the user — instead, do what the callback says (e.g. if it says "ask the user their favorite color", then use ask_question to ask them).`
     : "";
 
-  // Load pinned memories to inject into every prompt
-  const pinnedMemories = getPinnedMemories();
-  const pinnedContext = pinnedMemories.length > 0
-    ? `Pinned memories (always relevant):\n${pinnedMemories.map((m) => `- [${m.category}] ${m.content}`).join("\n")}\n\n`
-    : "";
-
   if (trigger === "user_message" && lastMessage.role === "user") {
-    prompt = `${pinnedContext}Recent conversation:\n\n${conversationContext}\n\nThe user just said: "${lastMessage.content}"${callbackContext}\n\nRespond to the user. You MUST call send_message (or ask_question/ask_multiple_choice/show_devices) to reply. If you use tools like get_lights first, read the JSON result and then send_message with a natural language answer. NEVER end without sending a visible response.`;
+    prompt = `Recent conversation:\n\n${conversationContext}\n\nThe user just said: "${lastMessage.content}"${callbackContext}\n\nRespond to the user. You MUST call send_message (or ask_question/ask_multiple_choice/show_devices) to reply. If you use tools like get_lights first, read the JSON result and then send_message with a natural language answer. NEVER end without sending a visible response.`;
   } else if (callbackReasons.length > 0) {
-    prompt = `${pinnedContext}Recent conversation:\n\n${conversationContext}${callbackContext}\n\nAct on the callbacks above. You MUST send a visible response to the user.`;
+    prompt = `Recent conversation:\n\n${conversationContext}${callbackContext}\n\nAct on the callbacks above. You MUST send a visible response to the user.`;
   } else {
-    prompt = `${pinnedContext}Recent conversation:\n\n${conversationContext}\n\nProactive check-in. Check if there's anything useful to tell the user. If so, use send_message. If not, do nothing.`;
+    prompt = `Recent conversation:\n\n${conversationContext}\n\nProactive check-in. Check if there's anything useful to tell the user. If so, use send_message. If not, do nothing.`;
   }
 
   log(`[agent] Calling Claude (${model}) with ${messages.length} messages of context`);
@@ -133,6 +145,7 @@ async function agentDecide(
           },
         },
         allowedTools: ["mcp__ai-assistant__*"],
+        disallowedTools: ["mcp__ai-assistant__edit_memory"],
         permissionMode: "bypassPermissions",
         maxTurns: 10,
       },
@@ -163,19 +176,26 @@ export const DEFAULT_DREAM_PROMPT = `You are in "dream mode" — a quiet, reflec
 This is NOT a conversation with the user. Do NOT use send_message, ask_question, or any user-facing tools. The user will not see this.
 
 Your task:
-1. Use get_current_time to know what day it is
+1. Use get_current_time to know what day it is 
+   - It's important to know the time, accurate time is crucial for context and planning.
+   - Remember to adjust for timezone differences if applicable. The database tends to store timestamps in UTC, please convert to local time for user-facing displays or memory context.
 2. Use get_messages to review today's conversations
 3. Use recall to review ALL existing memories
 4. Prune outdated memories: use forget to delete memories that are no longer accurate, relevant, or have been superseded
 5. Consolidate: if multiple memories say similar things, forget the old ones and remember a single clearer version
+   - For LARGE changes (new info, restructuring, merging), use forget + remember.
+   - For MINOR edits ONLY (updating a date, fixing a typo, small clarifications, a single corrected fact), use edit_memory instead — this preserves the memory's identity and history.
 6. Reflect on patterns, preferences, and useful context you've noticed today
 7. Use remember to save NEW important observations. Use the category "dream" for reflections.
+8. After creating your new memories, make another pass through the existing memories to see if you can consolidate any.
+9. Reflect on your own performance: what did you do well? what could you improve? what new skills should you learn?
+10. Output a summary of your reflections in a clear, concise format. Noting any changes you made to the memories.
 
 Things to reflect on:
 - What did the user care about today? Any recurring themes?
 - Did you learn any preferences (wake time, favorite rooms, routines)?
 - Were there any frustrations or things that didn't go well?
-- What could you proactively help with tomorrow?
+- What could you proactively help with tomorrow? Schedule using your schedule_callback tool if needed.
 - Any smart home patterns (which lights are used when, temperature preferences)?
 - Anything the user told you that you should remember long-term?
 
@@ -193,7 +213,7 @@ async function runDream(
   mcpClient: Client,
   createMcpServer: McpServerFactory,
 ): Promise<void> {
-  const model = getSetting("agent_model") ?? DEFAULT_MODEL;
+  const model = getModelForPromptType("dream");
   const dreamPrompt = getSetting("dream_prompt") ?? DEFAULT_DREAM_PROMPT;
 
   log("[agent] 💤 Starting dream mode...");
@@ -217,7 +237,16 @@ async function runDream(
         maxTurns: 15,
       },
     })) {
-      if (msg.type === "result") {
+      // Log assistant text output so we can see what the model is thinking/saying during dream mode
+      if (msg.type === "assistant") {
+        const content = (msg as { message?: { content?: Array<{ type: string; text?: string }> } }).message?.content ?? [];
+        for (const block of content) {
+          if (block.type === "text" && block.text) {
+            log(`[agent] 💤 dream: ${block.text}`);
+            logToolCall(randomUUID(), "[dream_text]", { text: block.text });
+          }
+        }
+      } else if (msg.type === "result") {
         log(`[agent] 💤 Dream mode complete. Cost: $${(msg as { total_cost_usd?: number }).total_cost_usd ?? "?"}`);
         logToolCall(randomUUID(), "[dream_result]", {
           subtype: msg.subtype,

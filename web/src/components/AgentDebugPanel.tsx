@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import type React from "react";
 
 interface Memory {
   id: string;
@@ -6,6 +7,7 @@ interface Memory {
   category: string;
   pinned: boolean;
   createdAt: string;
+  deletedAt: string | null;
 }
 
 interface Callback {
@@ -29,6 +31,8 @@ interface AgentConfig {
   systemPrompt: string;
   dreamPrompt: string;
   model: string;
+  tickModel: string;
+  dreamModel: string;
   nextTickAt: number | null;
   running: boolean;
 }
@@ -38,6 +42,106 @@ const MODELS = [
   { id: "claude-opus-4-6", label: "Opus 4.6" },
   { id: "claude-haiku-4-5-20251001", label: "Haiku 3.5" },
 ];
+
+// Lightweight markdown renderer for **bold**, headers, bullets, and hr.
+function renderInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Split on **bold**, `code`
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("**")) {
+      parts.push(<strong key={key++} className="text-white font-semibold">{token.slice(2, -2)}</strong>);
+    } else {
+      parts.push(<code key={key++} className="bg-gray-900 text-amber-300 px-1 rounded text-[10px]">{token.slice(1, -1)}</code>);
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Horizontal rule
+    if (/^---+$/.test(trimmed)) {
+      blocks.push(<hr key={key++} className="my-2 border-gray-700" />);
+      i++;
+      continue;
+    }
+
+    // Headers
+    const headerMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const content = headerMatch[2];
+      const sizeClass = level === 1 ? "text-base font-bold" : level === 2 ? "text-sm font-bold" : "text-xs font-semibold uppercase tracking-wide";
+      const colorClass = level <= 2 ? "text-purple-200" : "text-purple-300";
+      blocks.push(
+        <div key={key++} className={`${sizeClass} ${colorClass} mt-2 mb-1`}>
+          {renderInline(content)}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Bullet list: consume consecutive bullet lines
+    if (/^[-*]\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[-*]\s+/, ""));
+        i++;
+      }
+      blocks.push(
+        <ul key={key++} className="list-disc list-outside ml-4 my-1 space-y-0.5">
+          {items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}
+        </ul>
+      );
+      continue;
+    }
+
+    // Numbered list
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^\d+\.\s+/, ""));
+        i++;
+      }
+      blocks.push(
+        <ol key={key++} className="list-decimal list-outside ml-5 my-1 space-y-0.5">
+          {items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}
+        </ol>
+      );
+      continue;
+    }
+
+    // Blank line
+    if (trimmed === "") {
+      blocks.push(<div key={key++} className="h-2" />);
+      i++;
+      continue;
+    }
+
+    // Paragraph
+    blocks.push(<p key={key++} className="my-0.5">{renderInline(line)}</p>);
+    i++;
+  }
+  return <>{blocks}</>;
+}
 
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -56,7 +160,7 @@ export function AgentDebugPanel() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [callbacks, setCallbacks] = useState<Callback[]>([]);
   const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
-  const [config, setConfig] = useState<AgentConfig>({ intervalMs: 30000, systemPrompt: "", dreamPrompt: "", model: "claude-sonnet-4-6", nextTickAt: null, running: false });
+  const [config, setConfig] = useState<AgentConfig>({ intervalMs: 30000, systemPrompt: "", dreamPrompt: "", model: "claude-sonnet-4-6", tickModel: "claude-sonnet-4-6", dreamModel: "claude-sonnet-4-6", nextTickAt: null, running: false });
   const [countdown, setCountdown] = useState<string>("");
   const [promptDraft, setPromptDraft] = useState("");
   const [promptDirty, setPromptDirty] = useState(false);
@@ -67,13 +171,15 @@ export function AgentDebugPanel() {
   const [dreamRunning, setDreamRunning] = useState(false);
   const [newMemory, setNewMemory] = useState("");
   const [newMemoryCategory, setNewMemoryCategory] = useState("general");
+  const [showDeletedMemories, setShowDeletedMemories] = useState(false);
+  const [memoryCategoryFilter, setMemoryCategoryFilter] = useState<string>("all");
   const [newCallbackReason, setNewCallbackReason] = useState("");
   const [newCallbackMinutes, setNewCallbackMinutes] = useState(5);
   const [intervalInput, setIntervalInput] = useState(30);
 
   const refresh = useCallback(async () => {
     const [memRes, cbRes, tcRes, cfgRes] = await Promise.all([
-      fetch("/api/agent/memories"),
+      fetch(`/api/agent/memories${showDeletedMemories ? "?includeDeleted=true" : ""}`),
       fetch("/api/agent/callbacks"),
       fetch("/api/agent/tool-calls?limit=30"),
       fetch("/api/agent/config"),
@@ -90,7 +196,8 @@ export function AgentDebugPanel() {
     if (!dreamDirty) {
       setDreamDraft(cfg.dreamPrompt);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDeletedMemories]);
 
   // Countdown timer
   useEffect(() => {
@@ -128,6 +235,22 @@ export function AgentDebugPanel() {
 
   const removeMemory = async (id: string) => {
     await fetch(`/api/agent/memories/${id}`, { method: "DELETE" });
+    if (showDeletedMemories) {
+      // Keep in list but mark deleted
+      setMemories((prev) => prev.map((m) => m.id === id ? { ...m, deletedAt: new Date().toISOString() } : m));
+    } else {
+      setMemories((prev) => prev.filter((m) => m.id !== id));
+    }
+  };
+
+  const restoreMemoryFn = async (id: string) => {
+    await fetch(`/api/agent/memories/${id}/restore`, { method: "POST" });
+    setMemories((prev) => prev.map((m) => m.id === id ? { ...m, deletedAt: null } : m));
+  };
+
+  const hardDeleteMemory = async (id: string) => {
+    if (!confirm("Permanently delete this memory? This cannot be undone.")) return;
+    await fetch(`/api/agent/memories/${id}?hard=true`, { method: "DELETE" });
     setMemories((prev) => prev.filter((m) => m.id !== id));
   };
 
@@ -171,11 +294,20 @@ export function AgentDebugPanel() {
     refresh();
   };
 
-  const updateModel = async (model: string) => {
+  const updateTickModel = async (tickModel: string) => {
     await fetch("/api/agent/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model }),
+      body: JSON.stringify({ tickModel }),
+    });
+    refresh();
+  };
+
+  const updateDreamModel = async (dreamModel: string) => {
+    await fetch("/api/agent/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dreamModel }),
     });
     refresh();
   };
@@ -279,22 +411,36 @@ export function AgentDebugPanel() {
         <p className="text-[10px] text-gray-500 mt-1">Runs daily at 3 AM. The agent reviews the day and saves reflections to memory.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:h-[480px]">
         {/* Config */}
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div className="lg:col-span-3 bg-gray-800 rounded-xl p-4 border border-gray-700 overflow-y-auto">
           <h3 className="text-sm font-medium text-gray-300 mb-3">Agent Config</h3>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Model</label>
+              <label className="text-xs text-gray-400 block mb-1">Tick model</label>
               <select
-                value={config.model}
-                onChange={(e) => updateModel(e.target.value)}
+                value={config.tickModel}
+                onChange={(e) => updateTickModel(e.target.value)}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100"
               >
                 {MODELS.map((m) => (
                   <option key={m.id} value={m.id}>{m.label}</option>
                 ))}
               </select>
+              <p className="text-[10px] text-gray-500 mt-1">Used for proactive check-ins and user chat.</p>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Dream model</label>
+              <select
+                value={config.dreamModel}
+                onChange={(e) => updateDreamModel(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100"
+              >
+                {MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-500 mt-1">Used for daily dream reflection. Needs larger context.</p>
             </div>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Idle interval</label>
@@ -327,35 +473,100 @@ export function AgentDebugPanel() {
         </div>
 
         {/* Memories */}
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <h3 className="text-sm font-medium text-gray-300 mb-3">
-            Memories <span className="text-gray-500">({memories.length}{memories.filter((m) => m.pinned).length > 0 ? `, ${memories.filter((m) => m.pinned).length} pinned` : ""})</span>
-          </h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
-            {memories.length === 0 && <p className="text-xs text-gray-500">No memories stored</p>}
-            {memories.map((m) => (
-              <div key={m.id} className={`flex items-start justify-between gap-2 text-xs ${m.pinned ? "bg-amber-500/5 -mx-2 px-2 py-1 rounded" : ""}`}>
+        <div className="lg:col-span-5 bg-gray-800 rounded-xl p-4 border border-gray-700 flex flex-col min-h-0">
+          {(() => {
+            const categories = Array.from(new Set(memories.map((m) => m.category))).sort();
+            const visible = memories.filter((m) =>
+              memoryCategoryFilter === "all" || m.category === memoryCategoryFilter
+            );
+            const activeCount = visible.filter((m) => !m.deletedAt).length;
+            const pinnedCount = visible.filter((m) => m.pinned && !m.deletedAt).length;
+            const deletedCount = visible.filter((m) => m.deletedAt).length;
+            return (
+              <>
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <h3 className="text-sm font-medium text-gray-300">
+                    Memories <span className="text-gray-500">
+                      ({activeCount}
+                      {pinnedCount > 0 ? `, ${pinnedCount} pinned` : ""}
+                      {showDeletedMemories && deletedCount > 0 ? `, ${deletedCount} deleted` : ""})
+                    </span>
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={memoryCategoryFilter}
+                      onChange={(e) => setMemoryCategoryFilter(e.target.value)}
+                      className="text-[10px] bg-gray-700 border border-gray-600 rounded px-1.5 py-0.5 text-gray-300"
+                    >
+                      <option value="all">all categories</option>
+                      {categories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <label className="text-[10px] text-gray-500 hover:text-gray-300 cursor-pointer flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={showDeletedMemories}
+                        onChange={(e) => setShowDeletedMemories(e.target.checked)}
+                        className="accent-blue-500"
+                      />
+                      show deleted
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-2 flex-1 min-h-0 overflow-y-auto mb-3">
+                  {visible.length === 0 && <p className="text-xs text-gray-500">No memories{memoryCategoryFilter !== "all" ? ` in "${memoryCategoryFilter}"` : " stored"}</p>}
+                  {visible.map((m) => (
+              <div key={m.id} className={`flex items-start justify-between gap-2 text-xs ${m.pinned && !m.deletedAt ? "bg-amber-500/5 -mx-2 px-2 py-1 rounded" : ""} ${m.deletedAt ? "opacity-50" : ""}`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1">
-                    {m.pinned && <span className="text-amber-400 text-[10px]" title="Pinned">📌</span>}
+                    {m.pinned && !m.deletedAt && <span className="text-amber-400 text-[10px]" title="Pinned">📌</span>}
                     <span className="text-[10px] bg-gray-700 text-gray-400 px-1 rounded">{m.category}</span>
+                    {m.deletedAt && <span className="text-[10px] bg-red-900/60 text-red-300 px-1 rounded">deleted</span>}
                   </div>
-                  <p className="text-gray-300 mt-0.5">{m.content}</p>
-                  <p className="text-[10px] text-gray-600">{timeAgo(m.createdAt)}</p>
+                  <p className={`mt-0.5 ${m.deletedAt ? "text-gray-500 line-through" : "text-gray-300"}`}>{m.content}</p>
+                  <p className="text-[10px] text-gray-600">
+                    {timeAgo(m.createdAt)}
+                    {m.deletedAt && ` · deleted ${timeAgo(m.deletedAt)}`}
+                  </p>
                 </div>
                 <div className="flex items-start gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => togglePinMemory(m.id, !m.pinned)}
-                    className={`${m.pinned ? "text-amber-400 hover:text-amber-300" : "text-gray-600 hover:text-amber-400"}`}
-                    title={m.pinned ? "Unpin" : "Pin"}
-                  >
-                    📌
-                  </button>
-                  <button onClick={() => removeMemory(m.id)} className="text-gray-600 hover:text-red-400" title="Delete">✕</button>
+                  {m.deletedAt ? (
+                    <>
+                      <button
+                        onClick={() => restoreMemoryFn(m.id)}
+                        className="text-gray-600 hover:text-green-400"
+                        title="Restore"
+                      >
+                        ↺
+                      </button>
+                      <button
+                        onClick={() => hardDeleteMemory(m.id)}
+                        className="text-gray-600 hover:text-red-400"
+                        title="Permanently delete"
+                      >
+                        🗑
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => togglePinMemory(m.id, !m.pinned)}
+                        className={`${m.pinned ? "text-amber-400 hover:text-amber-300" : "text-gray-600 hover:text-amber-400"}`}
+                        title={m.pinned ? "Unpin" : "Pin"}
+                      >
+                        📌
+                      </button>
+                      <button onClick={() => removeMemory(m.id)} className="text-gray-600 hover:text-red-400" title="Delete">✕</button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
           </div>
+              </>
+            );
+          })()}
           <div className="flex gap-1">
             <input
               value={newMemory}
@@ -380,11 +591,11 @@ export function AgentDebugPanel() {
         </div>
 
         {/* Callbacks */}
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div className="lg:col-span-4 bg-gray-800 rounded-xl p-4 border border-gray-700 flex flex-col min-h-0">
           <h3 className="text-sm font-medium text-gray-300 mb-3">
             Scheduled Callbacks <span className="text-gray-500">({callbacks.filter((c) => !c.fired).length} pending)</span>
           </h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
+          <div className="space-y-2 flex-1 min-h-0 overflow-y-auto mb-3">
             {callbacks.length === 0 && <p className="text-xs text-gray-500">No callbacks scheduled</p>}
             {callbacks.map((cb) => (
               <div key={cb.id} className={`flex items-start justify-between gap-2 text-xs ${cb.fired ? "opacity-50" : ""}`}>
@@ -434,7 +645,10 @@ export function AgentDebugPanel() {
           {toolCalls.map((tc) => {
             const isAgentTick = tc.toolName === "[agent_tick]";
             const isCallback = tc.toolName === "[callback_fired]";
+            const isDreamText = tc.toolName === "[dream_text]";
+            const isDreamMeta = tc.toolName === "[dream_mode]" || tc.toolName === "[dream_result]" || tc.toolName === "[dream_error]";
             const isSystem = isAgentTick || isCallback;
+            const args = tc.arguments as Record<string, unknown>;
 
             return (
               <div key={tc.id} className={`${isSystem ? "opacity-60" : ""}`}>
@@ -443,23 +657,30 @@ export function AgentDebugPanel() {
                   <span className={`flex-shrink-0 ${
                     isAgentTick ? "text-yellow-500" :
                     isCallback ? "text-orange-400" :
+                    isDreamText ? "text-purple-400" :
+                    isDreamMeta ? "text-purple-500" :
                     "text-blue-400"
                   }`}>
-                    {isAgentTick ? `⚡ tick #${(tc.arguments as Record<string,unknown>).tickCount} (${(tc.arguments as Record<string,unknown>).trigger})` :
+                    {isAgentTick ? `⚡ tick #${args.tickCount} (${args.trigger})` :
                      isCallback ? `🔔 callback` :
+                     isDreamText ? `💭 dream` :
                      tc.toolName}
                   </span>
                 </div>
-                {!isAgentTick && (
+                {isDreamText ? (
+                  <div className="ml-16 mt-1 mb-2 text-gray-200 font-sans text-xs leading-relaxed border-l-2 border-purple-800/50 pl-3">
+                    {renderMarkdown(String(args.text ?? ""))}
+                  </div>
+                ) : !isAgentTick && (
                   <div className="ml-16 text-gray-500 break-all whitespace-pre-wrap">
                     {JSON.stringify(tc.arguments, null, 2)}
                   </div>
                 )}
-                {tc.result && !isSystem && (
+                {tc.result && !isSystem && !isDreamText && (
                   <div className="ml-16 text-emerald-600 break-all whitespace-pre-wrap">→ {tc.result}</div>
                 )}
                 {isCallback && (
-                  <div className="ml-16 text-gray-500">{(tc.arguments as Record<string,unknown>).reason as string}</div>
+                  <div className="ml-16 text-gray-500">{args.reason as string}</div>
                 )}
               </div>
             );

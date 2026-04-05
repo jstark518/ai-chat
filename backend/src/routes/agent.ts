@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import {
-  getMemories, addMemory, deleteMemory, setMemoryPinned,
+  getMemories, addMemory, deleteMemory, restoreMemory, hardDeleteMemory, setMemoryPinned,
   getAllCallbacks, addScheduledCallback, deleteCallback,
   getToolCalls, clearToolCalls,
   getSetting, setSetting,
@@ -15,7 +15,8 @@ const agent = new Hono();
 
 agent.get("/api/agent/memories", (c) => {
   const category = c.req.query("category");
-  return c.json(getMemories(category));
+  const includeDeleted = c.req.query("includeDeleted") === "true";
+  return c.json(getMemories(category, includeDeleted));
 });
 
 agent.post("/api/agent/memories", async (c) => {
@@ -27,9 +28,18 @@ agent.post("/api/agent/memories", async (c) => {
 
 agent.delete("/api/agent/memories/:id", (c) => {
   const id = c.req.param("id");
-  log(`[routes] DELETE /api/agent/memories/${id}`);
-  const deleted = deleteMemory(id);
-  if (!deleted) return c.json({ error: "Memory not found" }, 404);
+  const hard = c.req.query("hard") === "true";
+  log(`[routes] DELETE /api/agent/memories/${id}${hard ? " (hard)" : ""}`);
+  const ok = hard ? hardDeleteMemory(id) : deleteMemory(id);
+  if (!ok) return c.json({ error: "Memory not found" }, 404);
+  return c.json({ ok: true });
+});
+
+agent.post("/api/agent/memories/:id/restore", (c) => {
+  const id = c.req.param("id");
+  log(`[routes] POST /api/agent/memories/${id}/restore`);
+  const ok = restoreMemory(id);
+  if (!ok) return c.json({ error: "Memory not found" }, 404);
   return c.json({ ok: true });
 });
 
@@ -83,15 +93,25 @@ agent.get("/api/agent/config", (c) => {
   const intervalMs = Number(getSetting("agent_interval_ms") ?? 30000);
   const systemPrompt = getSetting("system_prompt") ?? DEFAULT_SYSTEM_PROMPT;
   const dreamPrompt = getSetting("dream_prompt") ?? DEFAULT_DREAM_PROMPT;
-  const model = getSetting("agent_model") ?? "claude-sonnet-4-6";
+  const legacyModel = getSetting("agent_model") ?? "claude-sonnet-4-6";
+  const tickModel = getSetting("tick_model") ?? legacyModel;
+  const dreamModel = getSetting("dream_model") ?? legacyModel;
   const nextTickAt = getNextTickAt();
   const running = isAgentRunning();
-  return c.json({ intervalMs, systemPrompt, dreamPrompt, model, nextTickAt, running });
+  // `model` is kept for back-compat with older clients
+  return c.json({ intervalMs, systemPrompt, dreamPrompt, model: tickModel, tickModel, dreamModel, nextTickAt, running });
 });
 
 agent.put("/api/agent/config", async (c) => {
-  const body = await c.req.json<{ intervalMs?: number; systemPrompt?: string; model?: string }>();
-  log("[routes] PUT /api/agent/config", JSON.stringify({ ...body, systemPrompt: body.systemPrompt ? `(${body.systemPrompt.length} chars)` : undefined }));
+  const body = await c.req.json<{
+    intervalMs?: number;
+    systemPrompt?: string;
+    dreamPrompt?: string;
+    model?: string;
+    tickModel?: string;
+    dreamModel?: string;
+  }>();
+  log("[routes] PUT /api/agent/config", JSON.stringify({ ...body, systemPrompt: body.systemPrompt ? `(${body.systemPrompt.length} chars)` : undefined, dreamPrompt: body.dreamPrompt ? `(${body.dreamPrompt.length} chars)` : undefined }));
   if (body.intervalMs !== undefined) {
     setSetting("agent_interval_ms", String(body.intervalMs));
     setProactiveInterval(body.intervalMs);
@@ -99,11 +119,20 @@ agent.put("/api/agent/config", async (c) => {
   if (body.systemPrompt !== undefined) {
     setSetting("system_prompt", body.systemPrompt);
   }
-  if (body.model !== undefined) {
-    setSetting("agent_model", body.model);
+  if (body.dreamPrompt !== undefined) {
+    setSetting("dream_prompt", body.dreamPrompt);
   }
-  if ((body as Record<string, unknown>).dreamPrompt !== undefined) {
-    setSetting("dream_prompt", (body as Record<string, unknown>).dreamPrompt as string);
+  // New: per-prompt-type models
+  if (body.tickModel !== undefined) {
+    setSetting("tick_model", body.tickModel);
+  }
+  if (body.dreamModel !== undefined) {
+    setSetting("dream_model", body.dreamModel);
+  }
+  // Legacy: `model` sets the tick model (back-compat)
+  if (body.model !== undefined) {
+    setSetting("tick_model", body.model);
+    setSetting("agent_model", body.model); // keep legacy key in sync
   }
   return c.json({ ok: true });
 });

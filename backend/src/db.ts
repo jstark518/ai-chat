@@ -131,6 +131,7 @@ const migrations = [
   "ALTER TABLE govee_devices ADD COLUMN room TEXT DEFAULT 'Unassigned'",
   "ALTER TABLE messages ADD COLUMN devices TEXT",
   "ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE memories ADD COLUMN deleted_at TEXT",
 ];
 for (const sql of migrations) {
   try { db.exec(sql); } catch { /* column already exists */ }
@@ -745,6 +746,7 @@ export interface Memory {
   category: string;
   pinned: boolean;
   createdAt: string;
+  deletedAt: string | null;
 }
 
 interface RawMemory {
@@ -753,6 +755,7 @@ interface RawMemory {
   category: string;
   pinned: number;
   created_at: string;
+  deleted_at: string | null;
 }
 
 function mapMemory(row: RawMemory): Memory {
@@ -762,19 +765,21 @@ function mapMemory(row: RawMemory): Memory {
     category: row.category,
     pinned: row.pinned === 1,
     createdAt: row.created_at,
+    deletedAt: row.deleted_at ?? null,
   };
 }
 
-export function getMemories(category?: string): Memory[] {
-  // Pinned memories first, then by most recent
+export function getMemories(category?: string, includeDeleted = false): Memory[] {
+  // Pinned memories first, then by most recent. Filters out soft-deleted by default.
+  const deletedClause = includeDeleted ? "" : "AND deleted_at IS NULL";
   if (category) {
-    return (db.prepare("SELECT * FROM memories WHERE category = ? ORDER BY pinned DESC, created_at DESC").all(category) as RawMemory[]).map(mapMemory);
+    return (db.prepare(`SELECT * FROM memories WHERE category = ? ${deletedClause} ORDER BY pinned DESC, created_at DESC`).all(category) as RawMemory[]).map(mapMemory);
   }
-  return (db.prepare("SELECT * FROM memories ORDER BY pinned DESC, created_at DESC").all() as RawMemory[]).map(mapMemory);
+  return (db.prepare(`SELECT * FROM memories WHERE 1=1 ${deletedClause} ORDER BY pinned DESC, created_at DESC`).all() as RawMemory[]).map(mapMemory);
 }
 
 export function getPinnedMemories(): Memory[] {
-  return (db.prepare("SELECT * FROM memories WHERE pinned = 1 ORDER BY created_at DESC").all() as RawMemory[]).map(mapMemory);
+  return (db.prepare("SELECT * FROM memories WHERE pinned = 1 AND deleted_at IS NULL ORDER BY created_at DESC").all() as RawMemory[]).map(mapMemory);
 }
 
 export function addMemory(id: string, content: string, category = "general"): Memory {
@@ -783,16 +788,36 @@ export function addMemory(id: string, content: string, category = "general"): Me
   return { id, content, category, pinned: false, createdAt: now };
 }
 
+/** Update a memory's content. Returns the updated memory, or null if not found / soft-deleted. */
+export function updateMemory(id: string, content: string): Memory | null {
+  const changes = db.prepare("UPDATE memories SET content = ? WHERE id = ? AND deleted_at IS NULL").run(content, id).changes;
+  if (changes === 0) return null;
+  const row = db.prepare("SELECT * FROM memories WHERE id = ?").get(id) as RawMemory | undefined;
+  return row ? mapMemory(row) : null;
+}
+
+/** Soft-delete: sets deleted_at. Memory is hidden from queries but stays in the DB. */
 export function deleteMemory(id: string): boolean {
+  const now = new Date().toISOString();
+  return db.prepare("UPDATE memories SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL").run(now, id).changes > 0;
+}
+
+/** Restore a soft-deleted memory. */
+export function restoreMemory(id: string): boolean {
+  return db.prepare("UPDATE memories SET deleted_at = NULL WHERE id = ?").run(id).changes > 0;
+}
+
+/** Permanently delete. Use with care. */
+export function hardDeleteMemory(id: string): boolean {
   return db.prepare("DELETE FROM memories WHERE id = ?").run(id).changes > 0;
 }
 
 export function setMemoryPinned(id: string, pinned: boolean): boolean {
-  return db.prepare("UPDATE memories SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id).changes > 0;
+  return db.prepare("UPDATE memories SET pinned = ? WHERE id = ? AND deleted_at IS NULL").run(pinned ? 1 : 0, id).changes > 0;
 }
 
 export function searchMemories(query: string): Memory[] {
-  return (db.prepare("SELECT * FROM memories WHERE content LIKE ? ORDER BY pinned DESC, created_at DESC").all(`%${query}%`) as RawMemory[]).map(mapMemory);
+  return (db.prepare("SELECT * FROM memories WHERE content LIKE ? AND deleted_at IS NULL ORDER BY pinned DESC, created_at DESC").all(`%${query}%`) as RawMemory[]).map(mapMemory);
 }
 
 // ============================================================
