@@ -1,8 +1,8 @@
 # AI Assistant
 
-A proactive virtual assistant that runs on an interval, checking in with you via an iOS app. Instead of waiting passively for commands, the agent periodically evaluates whether there's anything worth doing — checking the time, your location, your smart home state, and its own memories — and takes action using a suite of MCP tools.
+A **proactive** personal agent that checks in with you on its own schedule. Instead of waiting passively for commands, it periodically evaluates whether there's anything worth doing — reviewing what you've been working on, its long-term memory, the time of day, and your location — and acts through a suite of MCP tools. Every night it **dreams**: a separate reflective pass that reviews the day's conversations, prunes stale memories, consolidates duplicates, and writes a reflection to long-term memory.
 
-Think of it as a smart home companion that actually starts conversations.
+Talk to it through a SwiftUI iOS app or an iMessage-style web chat.
 
 <p align="center">
   <img src="docs/ios-mockup.svg" alt="Rough mockup of the iOS app" width="320">
@@ -12,12 +12,13 @@ Think of it as a smart home companion that actually starts conversations.
 ## What it does
 
 - **Runs on a schedule.** Every few minutes the agent wakes up with a prompt like "Anything worth doing?" and decides whether to act, ask a question, or stay quiet.
-- **Controls your smart home.** Unified control over Govee (cloud) and TP-Link Kasa (local network) devices — lights, plugs, light strips — plus a mock device layer for testing.
-- **Chats with you.** Real-time messaging via WebSocket with typing indicators and read receipts, rendered as native chat bubbles in the iOS app.
-- **Remembers things.** Long-term memory, pinnable notes that always stay in context, and a "dream mode" that runs daily to consolidate and prune old memories.
-- **Shows interactive cards.** The agent can send smart-home cards directly into the chat with live device controls the user can tap.
-- **Schedules callbacks.** The agent can tell itself "wake me up in 2 hours and remind the user about X."
-- **Pulls live data.** Tools for web search, current time/date, user location, and message history.
+- **Dreams nightly.** A daily reflection pass (at 3 AM by default) reviews the day's messages, reads the task board for context, prunes outdated memories, consolidates duplicates, and writes a summary of what happened and what to watch for tomorrow. Uses a separately-configurable model since it needs more context than a tick.
+- **Remembers things long-term.** Memories are pinnable (always included in every prompt), soft-deletable with restore, in-place editable for minor fixes, and categorizable. Pinned memories are injected into the system prompt so they participate in prompt caching across ticks.
+- **Manages a kanban board.** To Do / Doing / Done columns for tracking what you're working on. The agent can add, move, and close tasks for you via chat, and you can drag cards around manually from web or iOS. Dream mode reads the board for context but can't mutate it.
+- **Chats with you.** Real-time WebSocket messaging with typing indicators, read receipts, multiple-choice prompts, and link previews, rendered as native bubbles on iOS **and** as an iMessage-style web chat.
+- **Schedules callbacks.** The agent can tell itself "wake me up in 2 hours and remind the user about X" and it'll fire on its own.
+- **Pulls live data.** Web search, web-page fetch, current time/date, user location (requested from the iOS device over WebSocket), and message history.
+- **Controls your smart home.** Unified control over Govee (cloud) and TP-Link Kasa (LAN) devices — lights, plugs, light strips — as one use case among many.
 
 ## Architecture
 
@@ -38,19 +39,17 @@ The brains. A Hono HTTP server with a WebSocket endpoint, a SQLite database, an 
 ### `ios/` — Native SwiftUI app
 Targets iOS 18+. Acts as both the chat UI **and** a tool provider — the backend can ask the iOS app for the user's location over WebSocket and the app will respond with CoreLocation data.
 
-- Chat view with markdown-free bubbles, typing indicators, read receipts
-- Multiple choice question prompts rendered as tappable buttons
-- Smart home cards with live WebSocket-driven state updates
+- **Chat tab**: markdown-free bubbles, typing indicators, read receipts, link previews, multiple-choice prompts, smart-home cards with live WebSocket-driven state updates
+- **Tasks tab**: kanban board with 3 stacked columns, per-task menu (move/edit/delete), add-task field, edit sheet
 - Local notifications when messages arrive in the background
 - `Config.swift` (gitignored) for backend URLs — see setup below
 
-### `web/` — React smart-home dashboard
-A React 19 + Vite + Tailwind v4 app for discovering, organizing, and debugging your smart home devices.
+### `web/` — React dashboard, chat, and kanban
+A React 19 + Vite + Tailwind v4 app with three tabs:
 
-- Auto-discovery of Kasa devices on the LAN
-- Govee device sync from the cloud
-- Room assignment, live state display
-- Settings panel for API keys, system prompt overrides, debug log viewer
+- **Chat**: iMessage-style web chat matching the iOS app, plus a kanban side panel for tasks (drag-and-drop between columns, inline editing, live WebSocket updates)
+- **Agent Debug**: system/dream prompt editors, per-prompt-type model selectors (tick vs. dream), memories browser with category filter + soft-delete toggle + restore, scheduled callbacks, live tool-call log with markdown rendering for dream reflections
+- **Smart Home**: Kasa LAN discovery, Govee cloud sync, room assignment, live state display, settings panel for API keys
 
 ## Tech Stack
 
@@ -67,13 +66,16 @@ The agent has access to a rich tool surface, all exposed through an in-process M
 |---|---|
 | Communication | `send_message`, `ask_question`, `ask_multiple_choice` |
 | User context | `get_location`, `get_messages`, `get_current_time` |
-| Memory | `remember`, `recall_memories`, `pin_memory`, `forget_memory` |
-| Scheduling | `set_reminder`, `schedule_callback` |
-| Web | `web_search` |
+| Memory | `remember`, `recall`, `forget`, `edit_memory`, `pin_memory`, `unpin_memory` |
+| Tasks (kanban) | `list_tasks`, `add_task`, `update_task`, `delete_task` |
+| Scheduling | `schedule_callback` |
+| Web | `web_search`, `web_fetch` |
 | Smart home (unified) | `get_lights`, `set_light`, `set_lights`, `set_room`, `show_devices`, `get_all_devices`, `sync_devices` |
 | Smart home (other) | `get_thermostat`, `set_thermostat`, `get_locks`, `set_lock`, `get_sensors`, `get_scenes`, `activate_scene` |
 
 Smart-home tools are source-agnostic: a light ID like `govee:H6008:ABCD...` or `kasa:ABC123` is routed automatically to the right backend.
+
+Some tools are **gated by prompt type**. The tick agent cannot call `edit_memory` (force it through `forget` + `remember` instead), and dream mode is **read-only** against the task board — it can `list_tasks` for context but cannot add/update/delete tasks. These gates are enforced via `disallowedTools` on the Agent SDK query, not just prompt wording.
 
 ## Setup
 
@@ -137,6 +139,13 @@ cp data/assistant.db "data/assistant.db.backup-$(date +%Y%m%d-%H%M%S)"
 - `DELETE /api/smarthome/devices/:id` — remove a device from the cache
 - `POST /api/kasa/devices/discover` — run LAN discovery
 - `POST /api/govee/sync` — sync from Govee cloud
+- `GET  /api/tasks` — list kanban tasks (optional `?status=todo|doing|done`)
+- `POST /api/tasks` — create a task `{ title, description?, status? }`
+- `PUT  /api/tasks/:id` — update title/description/status/sortOrder
+- `DELETE /api/tasks/:id` — delete a task
+- `GET  /api/agent/memories` — list memories (optional `?includeDeleted=true`)
+- `POST /api/agent/memories/:id/restore` — undo a soft-delete
+- `GET/PUT /api/agent/config` — agent interval, system/dream prompts, per-type models
 
 ### WebSocket
 `GET /ws` — bidirectional JSON messages. Event types:
@@ -146,6 +155,8 @@ cp data/assistant.db "data/assistant.db.backup-$(date +%Y%m%d-%H%M%S)"
 - `device_state_update` — live device state push
 - `device_control` — client → server control command
 - `request_location` / `location_response` — backend requests location, iOS responds
+- `task_updated` — live task create/update push
+- `task_deleted` — live task delete push
 
 ## Commands
 
@@ -158,6 +169,15 @@ npm start             # Run compiled backend
 ```
 
 ## Roadmap
+
+**Coming soon — new MCP integrations.** The agent is designed to pull in more of the user's digital life as read-only context and light-touch action surfaces:
+
+- **Amazon MCP** — track orders, deliveries, and returns; surface "arriving today" in the morning check-in, notice delays, link deliveries to tasks
+- **Calendar MCP** — read upcoming events so the agent can plan around meetings, respect focus blocks, and suggest timing for callbacks
+- **GitHub MCP** — PR reviews pending, CI failures, issues assigned to the user, stale branches — fed into morning check-ins and reflected on during dream mode
+- **Email MCP** — triage important mail, summarize threads, surface unreplied messages (read-only at first — sending requires explicit confirmation)
+
+**Also planned:**
 
 - **APNS push notifications** — currently uses local notifications; need a `.p8` key and `POST /api/devices/register` for real push.
 - **Publish to App Store** — the iOS app is ready but needs packaging.
