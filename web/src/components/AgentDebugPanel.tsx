@@ -28,13 +28,18 @@ interface ToolCallEntry {
 
 interface AgentConfig {
   intervalMs: number;
-  systemPrompt: string;
+  replyPrompt: string;
+  proactivePrompt: string;
   dreamPrompt: string;
-  model: string;
-  tickModel: string;
+  replyModel: string;
+  proactiveModel: string;
   dreamModel: string;
   nextTickAt: number | null;
   running: boolean;
+  // back-compat aliases
+  systemPrompt: string;
+  model: string;
+  tickModel: string;
 }
 
 const MODELS = [
@@ -160,11 +165,14 @@ export function AgentDebugPanel() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [callbacks, setCallbacks] = useState<Callback[]>([]);
   const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
-  const [config, setConfig] = useState<AgentConfig>({ intervalMs: 30000, systemPrompt: "", dreamPrompt: "", model: "claude-sonnet-4-6", tickModel: "claude-sonnet-4-6", dreamModel: "claude-sonnet-4-6", nextTickAt: null, running: false });
+  const [config, setConfig] = useState<AgentConfig>({ intervalMs: 30000, replyPrompt: "", proactivePrompt: "", dreamPrompt: "", replyModel: "claude-sonnet-4-6", proactiveModel: "claude-sonnet-4-6", dreamModel: "claude-sonnet-4-6", nextTickAt: null, running: false, systemPrompt: "", model: "", tickModel: "" });
   const [countdown, setCountdown] = useState<string>("");
-  const [promptDraft, setPromptDraft] = useState("");
-  const [promptDirty, setPromptDirty] = useState(false);
-  const [promptSaving, setPromptSaving] = useState(false);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replyDirty, setReplyDirty] = useState(false);
+  const [replySaving, setReplySaving] = useState(false);
+  const [proactiveDraft, setProactiveDraft] = useState("");
+  const [proactiveDirty, setProactiveDirty] = useState(false);
+  const [proactiveSaving, setProactiveSaving] = useState(false);
   const [dreamDraft, setDreamDraft] = useState("");
   const [dreamDirty, setDreamDirty] = useState(false);
   const [dreamSaving, setDreamSaving] = useState(false);
@@ -190,12 +198,9 @@ export function AgentDebugPanel() {
     const cfg = await cfgRes.json();
     setConfig(cfg);
     setIntervalInput(Math.round(cfg.intervalMs / 1000));
-    if (!promptDirty) {
-      setPromptDraft(cfg.systemPrompt);
-    }
-    if (!dreamDirty) {
-      setDreamDraft(cfg.dreamPrompt);
-    }
+    if (!replyDirty) setReplyDraft(cfg.replyPrompt);
+    if (!proactiveDirty) setProactiveDraft(cfg.proactivePrompt);
+    if (!dreamDirty) setDreamDraft(cfg.dreamPrompt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDeletedMemories]);
 
@@ -294,33 +299,36 @@ export function AgentDebugPanel() {
     refresh();
   };
 
-  const updateTickModel = async (tickModel: string) => {
+  const updateModel = async (key: string, value: string) => {
     await fetch("/api/agent/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tickModel }),
+      body: JSON.stringify({ [key]: value }),
     });
     refresh();
   };
 
-  const updateDreamModel = async (dreamModel: string) => {
+  const saveReplyPrompt = async () => {
+    setReplySaving(true);
     await fetch("/api/agent/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dreamModel }),
+      body: JSON.stringify({ replyPrompt: replyDraft }),
     });
+    setReplyDirty(false);
+    setReplySaving(false);
     refresh();
   };
 
-  const savePrompt = async () => {
-    setPromptSaving(true);
+  const saveProactivePrompt = async () => {
+    setProactiveSaving(true);
     await fetch("/api/agent/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ systemPrompt: promptDraft }),
+      body: JSON.stringify({ proactivePrompt: proactiveDraft }),
     });
-    setPromptDirty(false);
-    setPromptSaving(false);
+    setProactiveDirty(false);
+    setProactiveSaving(false);
     refresh();
   };
 
@@ -349,66 +357,54 @@ export function AgentDebugPanel() {
         <span>🤖</span> Agent Debug
       </h2>
 
-      {/* System Prompt */}
+      {/* Reply Prompt */}
       <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-gray-300">System Prompt</h3>
+          <h3 className="text-sm font-medium text-gray-300">💬 Reply Prompt</h3>
           <div className="flex items-center gap-2">
-            {promptDirty && (
-              <span className="text-[10px] text-amber-400">Unsaved changes</span>
-            )}
-            <button
-              onClick={savePrompt}
-              disabled={!promptDirty || promptSaving}
-              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-            >
-              {promptSaving ? "Saving..." : "Save"}
+            {replyDirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+            <button onClick={saveReplyPrompt} disabled={!replyDirty || replySaving} className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors">
+              {replySaving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
-        <textarea
-          value={promptDraft}
-          onChange={(e) => { setPromptDraft(e.target.value); setPromptDirty(true); }}
-          rows={6}
-          placeholder="Enter system prompt for the AI agent..."
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono resize-y"
-        />
+        <textarea value={replyDraft} onChange={(e) => { setReplyDraft(e.target.value); setReplyDirty(true); }} rows={4} placeholder="Reply prompt..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono resize-y" />
+        <p className="text-[10px] text-gray-500 mt-1">Used when responding to user messages. Must produce a visible reply.</p>
+      </div>
+
+      {/* Proactive Prompt */}
+      <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-300">⚡ Proactive Prompt</h3>
+          <div className="flex items-center gap-2">
+            {proactiveDirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+            <button onClick={saveProactivePrompt} disabled={!proactiveDirty || proactiveSaving} className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors">
+              {proactiveSaving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+        <textarea value={proactiveDraft} onChange={(e) => { setProactiveDraft(e.target.value); setProactiveDirty(true); }} rows={4} placeholder="Proactive prompt..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono resize-y" />
+        <p className="text-[10px] text-gray-500 mt-1">Runs on the idle interval. Should only act when there's something genuinely useful to say.</p>
       </div>
 
       {/* Dream Mode Prompt */}
       <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 mb-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-            💤 Dream Mode Prompt
+            💤 Dream Prompt
           </h3>
           <div className="flex items-center gap-2">
-            {dreamDirty && (
-              <span className="text-[10px] text-amber-400">Unsaved changes</span>
-            )}
-            <button
-              onClick={saveDreamPrompt}
-              disabled={!dreamDirty || dreamSaving}
-              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-            >
+            {dreamDirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+            <button onClick={saveDreamPrompt} disabled={!dreamDirty || dreamSaving} className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors">
               {dreamSaving ? "Saving..." : "Save"}
             </button>
-            <button
-              onClick={runDream}
-              disabled={dreamRunning || config.running}
-              className="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-            >
+            <button onClick={runDream} disabled={dreamRunning || config.running} className="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors">
               {dreamRunning ? "💤 Dreaming..." : "Run Now"}
             </button>
           </div>
         </div>
-        <textarea
-          value={dreamDraft}
-          onChange={(e) => { setDreamDraft(e.target.value); setDreamDirty(true); }}
-          rows={4}
-          placeholder="Enter dream mode prompt..."
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono resize-y"
-        />
-        <p className="text-[10px] text-gray-500 mt-1">Runs daily at 3 AM. The agent reviews the day and saves reflections to memory.</p>
+        <textarea value={dreamDraft} onChange={(e) => { setDreamDraft(e.target.value); setDreamDirty(true); }} rows={4} placeholder="Dream prompt..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono resize-y" />
+        <p className="text-[10px] text-gray-500 mt-1">Runs daily at 3 AM. Reviews the day, consolidates memories, and can edit all three prompts.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:h-[480px]">
@@ -417,30 +413,22 @@ export function AgentDebugPanel() {
           <h3 className="text-sm font-medium text-gray-300 mb-3">Agent Config</h3>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Tick model</label>
-              <select
-                value={config.tickModel}
-                onChange={(e) => updateTickModel(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100"
-              >
-                {MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
+              <label className="text-xs text-gray-400 block mb-1">💬 Reply model</label>
+              <select value={config.replyModel} onChange={(e) => updateModel("replyModel", e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
+                {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
-              <p className="text-[10px] text-gray-500 mt-1">Used for proactive check-ins and user chat.</p>
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Dream model</label>
-              <select
-                value={config.dreamModel}
-                onChange={(e) => updateDreamModel(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100"
-              >
-                {MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
+              <label className="text-xs text-gray-400 block mb-1">⚡ Proactive model</label>
+              <select value={config.proactiveModel} onChange={(e) => updateModel("proactiveModel", e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
+                {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
-              <p className="text-[10px] text-gray-500 mt-1">Used for daily dream reflection. Needs larger context.</p>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">💤 Dream model</label>
+              <select value={config.dreamModel} onChange={(e) => updateModel("dreamModel", e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
+                {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
             </div>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Idle interval</label>
@@ -464,7 +452,7 @@ export function AgentDebugPanel() {
               <p className="text-[10px] text-gray-500 mt-1">Current: {config.intervalMs / 1000}s</p>
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Next tick</label>
+              <label className="text-xs text-gray-400 block mb-1">Next proactive run</label>
               <p className={`text-sm font-mono ${config.running ? "text-yellow-400" : "text-gray-200"}`}>
                 {config.running ? "⚡ Running..." : `⏱ ${countdown}`}
               </p>
@@ -640,7 +628,7 @@ export function AgentDebugPanel() {
             Clear
           </button>
         </div>
-        <div className="space-y-1.5 max-h-96 overflow-y-auto font-mono text-[11px]">
+        <div className="space-y-1.5 max-h-[960px] overflow-y-auto font-mono text-[11px]">
           {toolCalls.length === 0 && <p className="text-xs text-gray-500 font-sans">No tool calls logged</p>}
           {toolCalls.map((tc) => {
             const isAgentTick = tc.toolName === "[agent_tick]";

@@ -2,26 +2,38 @@ import SwiftUI
 
 struct ConnectionStatusView: View {
     let status: ConnectionStatus
+    var isSyncing: Bool = false
+    var onTap: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: 7, height: 7)
-                .overlay(
+        Button {
+            onTap?()
+        } label: {
+            HStack(spacing: 4) {
+                if isSyncing {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else {
                     Circle()
-                        .stroke(dotColor.opacity(0.3), lineWidth: 2)
-                        .scaleEffect(status == .connecting || status == .reconnecting ? 2 : 1)
-                        .opacity(status == .connecting || status == .reconnecting ? 0 : 1)
-                        .animation(
-                            .easeOut(duration: 1).repeatForever(autoreverses: false),
-                            value: status
+                        .fill(dotColor)
+                        .frame(width: 7, height: 7)
+                        .overlay(
+                            Circle()
+                                .stroke(dotColor.opacity(0.3), lineWidth: 2)
+                                .scaleEffect(status == .connecting || status == .reconnecting ? 2 : 1)
+                                .opacity(status == .connecting || status == .reconnecting ? 0 : 1)
+                                .animation(
+                                    .easeOut(duration: 1).repeatForever(autoreverses: false),
+                                    value: status
+                                )
                         )
-                )
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                }
+                Text(isSyncing ? "Syncing..." : label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .buttonStyle(.plain)
     }
 
     private var dotColor: Color {
@@ -48,6 +60,7 @@ struct ConnectionStatusView: View {
         ConnectionStatusView(status: .connecting)
         ConnectionStatusView(status: .reconnecting)
         ConnectionStatusView(status: .disconnected)
+        ConnectionStatusView(status: .connected, isSyncing: true)
     }
     .padding()
 }

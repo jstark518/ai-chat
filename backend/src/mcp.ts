@@ -8,11 +8,13 @@ import {
   addMemory, getMemories, deleteMemory, updateMemory, searchMemories, setMemoryPinned,
   addScheduledCallback, getAllCallbacks, deleteCallback,
   getTasks, addTask, updateTask, deleteTask, type TaskStatus,
+  getSetting, setSetting, getDreams,
 } from "./db.js";
 import type { Message } from "./db.js";
 import { broadcast, broadcastEvent } from "./ws.js";
 import { log } from "./logger.js";
 import { registerSmartHomeTools } from "./smarthome.js";
+import { DEFAULT_REPLY_PROMPT, DEFAULT_PROACTIVE_PROMPT, DEFAULT_DREAM_PROMPT } from "./agent.js";
 import { registerWebTools } from "./web-tools.js";
 
 /** Simple line-based diff for logging minor memory edits. */
@@ -290,13 +292,16 @@ function createMCPServer(): McpServer {
   // --- get_messages ---
   server.tool(
     "get_messages",
-    "Get recent message history from the conversation.",
+    "Get recent message history from the conversation. Timestamps are in both UTC (iso) and local time (localTime) for convenience.",
     {
       limit: z.number().optional().default(20).describe("Maximum number of messages to return"),
     },
     async ({ limit }) => {
       log("[mcp] Tool called: get_messages", JSON.stringify({ limit }));
-      const messages = getMessages(limit);
+      const messages = getMessages(limit).map((m) => ({
+        ...m,
+        localTime: new Date(m.timestamp).toLocaleString("en-US", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      }));
       return {
         content: [{ type: "text" as const, text: JSON.stringify(messages) }],
       };
@@ -500,6 +505,60 @@ function createMCPServer(): McpServer {
     }
   );
 
+  // --- get_prompts ---
+  server.tool(
+    "get_prompts",
+    "Read the current reply prompt (used when responding to user messages), proactive prompt (used for periodic check-ins), and dream prompt (used for nightly reflection). Use this before making edits with update_prompt so you can see what's there.",
+    {},
+    async () => {
+      log("[mcp] Tool called: get_prompts");
+      const replyPrompt = getSetting("reply_prompt") ?? getSetting("system_prompt") ?? DEFAULT_REPLY_PROMPT;
+      const proactivePrompt = getSetting("proactive_prompt") ?? getSetting("system_prompt") ?? DEFAULT_PROACTIVE_PROMPT;
+      const dreamPrompt = getSetting("dream_prompt") ?? DEFAULT_DREAM_PROMPT;
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ replyPrompt, proactivePrompt, dreamPrompt }) }],
+      };
+    }
+  );
+
+  // --- update_prompt ---
+  server.tool(
+    "update_prompt",
+    "Update a prompt. Three types: 'reply' (responds to user messages), 'proactive' (periodic check-ins), 'dream' (nightly reflection). IMPORTANT: These changes are persistent and affect all future agent runs. Be conservative — make small, targeted edits based on clear evidence from conversations. Don't rewrite the whole prompt; add or adjust specific rules or instructions. Prefer appending a new guideline over restructuring existing ones.",
+    {
+      type: z.enum(["reply", "proactive", "dream"]).describe("Which prompt to update"),
+      content: z.string().describe("The full updated prompt text"),
+    },
+    async ({ type, content }) => {
+      const keyMap: Record<string, string> = { reply: "reply_prompt", proactive: "proactive_prompt", dream: "dream_prompt" };
+      const key = keyMap[type];
+      log(`[mcp] Tool called: update_prompt (${type})`, `${content.length} chars`);
+      setSetting(key, content);
+      return {
+        content: [{ type: "text" as const, text: `${type} prompt updated (${content.length} chars)` }],
+      };
+    }
+  );
+
+  // --- get_dream_history ---
+  server.tool(
+    "get_dream_history",
+    "Read past dream reflections. Returns the most recent dream summaries including what memories were changed, patterns noticed, and self-improvement notes. Use this to review what previous dream sessions concluded.",
+    {
+      limit: z.number().min(1).max(50).optional().describe("Number of recent dreams to return (default 5)"),
+    },
+    async ({ limit }) => {
+      log("[mcp] Tool called: get_dream_history", JSON.stringify({ limit }));
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const dreams = getDreams(limit ?? 5).map((d) => ({
+        ...d,
+        localStartedAt: new Date(d.startedAt).toLocaleString("en-US", { timeZone: tz }),
+        localCompletedAt: new Date(d.completedAt).toLocaleString("en-US", { timeZone: tz }),
+      }));
+      return { content: [{ type: "text" as const, text: JSON.stringify(dreams) }] };
+    }
+  );
+
   // --- list_tasks ---
   server.tool(
     "list_tasks",
@@ -574,7 +633,7 @@ function createMCPServer(): McpServer {
   return server;
 }
 
-export async function initMCP(): Promise<{ client: Client; agentMcpServer: McpServer }> {
+export async function initMCP(): Promise<{ client: Client; createAgentMcpServer: () => McpServer }> {
   // Server #1: connected via InMemoryTransport for direct tool calls (routes, etc.)
   const server = createMCPServer();
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

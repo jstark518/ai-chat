@@ -15,6 +15,7 @@ struct ChatView: View {
     @State private var showSettings = false
     @State private var showMessageDetail: Message?
     @State private var isRefreshing = false
+    @State private var isSyncing = false
 
     private var filteredMessages: [Message] {
         guard !searchQuery.isEmpty else { return messages }
@@ -86,7 +87,11 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    ConnectionStatusView(status: webSocketService.status)
+                    ConnectionStatusView(
+                        status: webSocketService.status,
+                        isSyncing: isSyncing,
+                        onTap: { syncMessages() }
+                    )
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -338,13 +343,39 @@ struct ChatView: View {
     private func loadHistory() async {
         do {
             let history = try await APIService.shared.fetchMessages()
-            messages = history
-            let assistantIds = history.filter { $0.role == .assistant }.map { $0.id.uuidString }
+            mergeMessages(history)
+            let assistantIds = messages.filter { $0.role == .assistant }.map { $0.id.uuidString }
             if !assistantIds.isEmpty {
                 webSocketService.sendReadReceipt(messageIds: assistantIds)
             }
         } catch {
             print("Failed to load history: \(error)")
+        }
+    }
+
+    private func syncMessages() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        guard !isSyncing else { return }
+        isSyncing = true
+        HapticManager.light()
+        Task {
+            async let fetch: () = loadHistory()
+            async let minDelay: () = Task.sleep(for: .seconds(2))
+            await fetch
+            try? await minDelay
+            isSyncing = false
+        }
+    }
+
+    private func mergeMessages(_ incoming: [Message]) {
+        let existingIds = Set(messages.map { $0.id })
+        let newMessages = incoming.filter { !existingIds.contains($0.id) }
+        if newMessages.isEmpty && messages.count == incoming.count {
+            // Full refresh (initial load or no local-only messages)
+            messages = incoming
+        } else if !newMessages.isEmpty {
+            messages.append(contentsOf: newMessages)
+            messages.sort { $0.timestamp < $1.timestamp }
         }
     }
 
@@ -398,6 +429,9 @@ struct ChatView: View {
                         )
                     }
                 }
+
+            case .reconnected:
+                await loadHistory()
             }
         }
     }

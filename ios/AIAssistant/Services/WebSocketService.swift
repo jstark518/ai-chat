@@ -6,6 +6,7 @@ enum WSIncoming {
     case read(Set<String>)
     case deviceStateUpdate(deviceId: String, state: [String: Any])
     case requestLocation(requestId: String)
+    case reconnected
 }
 
 enum ConnectionStatus {
@@ -110,6 +111,7 @@ final class WebSocketService {
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.connect()
+            self?.continuation?.yield(.reconnected)
         }
     }
 

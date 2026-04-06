@@ -7,7 +7,7 @@ import {
   getSetting, setSetting,
 } from "../db.js";
 import { log } from "../logger.js";
-import { setProactiveInterval, DEFAULT_SYSTEM_PROMPT, DEFAULT_DREAM_PROMPT, getNextTickAt, isAgentRunning, triggerDream } from "../agent.js";
+import { setProactiveInterval, DEFAULT_REPLY_PROMPT, DEFAULT_PROACTIVE_PROMPT, DEFAULT_DREAM_PROMPT, getNextTickAt, isAgentRunning, triggerDream } from "../agent.js";
 
 const agent = new Hono();
 
@@ -91,48 +91,76 @@ agent.delete("/api/agent/tool-calls", (c) => {
 
 agent.get("/api/agent/config", (c) => {
   const intervalMs = Number(getSetting("agent_interval_ms") ?? 30000);
-  const systemPrompt = getSetting("system_prompt") ?? DEFAULT_SYSTEM_PROMPT;
-  const dreamPrompt = getSetting("dream_prompt") ?? DEFAULT_DREAM_PROMPT;
   const legacyModel = getSetting("agent_model") ?? "claude-sonnet-4-6";
-  const tickModel = getSetting("tick_model") ?? legacyModel;
+  // Per-type prompts with fallback to legacy system_prompt
+  const replyPrompt = getSetting("reply_prompt") ?? getSetting("system_prompt") ?? DEFAULT_REPLY_PROMPT;
+  const proactivePrompt = getSetting("proactive_prompt") ?? getSetting("system_prompt") ?? DEFAULT_PROACTIVE_PROMPT;
+  const dreamPrompt = getSetting("dream_prompt") ?? DEFAULT_DREAM_PROMPT;
+  // Per-type models with fallback to legacy tick_model → agent_model
+  const replyModel = getSetting("reply_model") ?? getSetting("tick_model") ?? legacyModel;
+  const proactiveModel = getSetting("proactive_model") ?? getSetting("tick_model") ?? legacyModel;
   const dreamModel = getSetting("dream_model") ?? legacyModel;
   const nextTickAt = getNextTickAt();
   const running = isAgentRunning();
-  // `model` is kept for back-compat with older clients
-  return c.json({ intervalMs, systemPrompt, dreamPrompt, model: tickModel, tickModel, dreamModel, nextTickAt, running });
+  return c.json({
+    intervalMs, replyPrompt, proactivePrompt, dreamPrompt,
+    replyModel, proactiveModel, dreamModel,
+    // Back-compat aliases
+    systemPrompt: replyPrompt, model: replyModel, tickModel: replyModel,
+    nextTickAt, running,
+  });
 });
 
 agent.put("/api/agent/config", async (c) => {
   const body = await c.req.json<{
     intervalMs?: number;
-    systemPrompt?: string;
+    replyPrompt?: string;
+    proactivePrompt?: string;
     dreamPrompt?: string;
+    replyModel?: string;
+    proactiveModel?: string;
+    dreamModel?: string;
+    // Back-compat
+    systemPrompt?: string;
     model?: string;
     tickModel?: string;
-    dreamModel?: string;
   }>();
-  log("[routes] PUT /api/agent/config", JSON.stringify({ ...body, systemPrompt: body.systemPrompt ? `(${body.systemPrompt.length} chars)` : undefined, dreamPrompt: body.dreamPrompt ? `(${body.dreamPrompt.length} chars)` : undefined }));
+  log("[routes] PUT /api/agent/config", JSON.stringify({
+    ...body,
+    replyPrompt: body.replyPrompt ? `(${body.replyPrompt.length} chars)` : undefined,
+    proactivePrompt: body.proactivePrompt ? `(${body.proactivePrompt.length} chars)` : undefined,
+    dreamPrompt: body.dreamPrompt ? `(${body.dreamPrompt.length} chars)` : undefined,
+    systemPrompt: body.systemPrompt ? `(${body.systemPrompt.length} chars)` : undefined,
+  }));
   if (body.intervalMs !== undefined) {
     setSetting("agent_interval_ms", String(body.intervalMs));
     setProactiveInterval(body.intervalMs);
   }
+  // Per-type prompts
+  if (body.replyPrompt !== undefined) setSetting("reply_prompt", body.replyPrompt);
+  if (body.proactivePrompt !== undefined) setSetting("proactive_prompt", body.proactivePrompt);
+  if (body.dreamPrompt !== undefined) setSetting("dream_prompt", body.dreamPrompt);
+  // Per-type models
+  if (body.replyModel !== undefined) setSetting("reply_model", body.replyModel);
+  if (body.proactiveModel !== undefined) setSetting("proactive_model", body.proactiveModel);
+  if (body.dreamModel !== undefined) setSetting("dream_model", body.dreamModel);
+  // Back-compat: systemPrompt → reply_prompt
   if (body.systemPrompt !== undefined) {
     setSetting("system_prompt", body.systemPrompt);
+    setSetting("reply_prompt", body.systemPrompt);
   }
-  if (body.dreamPrompt !== undefined) {
-    setSetting("dream_prompt", body.dreamPrompt);
-  }
-  // New: per-prompt-type models
+  // Back-compat: tickModel → reply + proactive
   if (body.tickModel !== undefined) {
     setSetting("tick_model", body.tickModel);
+    setSetting("reply_model", body.tickModel);
+    setSetting("proactive_model", body.tickModel);
   }
-  if (body.dreamModel !== undefined) {
-    setSetting("dream_model", body.dreamModel);
-  }
-  // Legacy: `model` sets the tick model (back-compat)
+  // Back-compat: model → same as tickModel
   if (body.model !== undefined) {
+    setSetting("agent_model", body.model);
     setSetting("tick_model", body.model);
-    setSetting("agent_model", body.model); // keep legacy key in sync
+    setSetting("reply_model", body.model);
+    setSetting("proactive_model", body.model);
   }
   return c.json({ ok: true });
 });
@@ -145,7 +173,7 @@ agent.post("/api/agent/dream", async (c) => {
     return c.json({ error: "Agent not initialized" }, 500);
   }
   // Run in background so the request doesn't hang
-  triggerDream().catch((err) => log(`[routes] Dream mode error: ${err}`));
+  triggerDream(true).catch((err) => log(`[routes] Dream mode error: ${err}`));
   return c.json({ ok: true, message: "Dream mode started" });
 });
 

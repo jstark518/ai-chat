@@ -36,18 +36,19 @@ export async function discoverKasaDevices(timeoutMs = 10_000): Promise<KasaDevic
 
     const discovery = client.startDiscovery({ discoveryTimeout: timeoutMs });
 
-    discovery.on("device-new", (device: DiscoveredDevice) => {
+    discovery.on("device-new", (_device: unknown) => {
+      const d = _device as DiscoveredDevice;
       // Use `id` which is unique per outlet for power strips, or deviceId for standalone
-      const uniqueId = device.id ?? device.childId ?? device.deviceId ?? device.host;
-      const childId = device.childId ?? null;
-      const type = classifyKasaType(device.model ?? "");
-      log(`[kasa] Found: ${device.alias} (${device.model}) at ${device.host} id=${uniqueId}${childId ? ` child=${childId}` : ""}`);
+      const uniqueId = d.id ?? d.childId ?? d.deviceId ?? d.host;
+      const child = d.childId ?? null;
+      const type = classifyKasaType(d.model ?? "");
+      log(`[kasa] Found: ${d.alias} (${d.model}) at ${d.host} id=${uniqueId}${child ? ` child=${child}` : ""}`);
 
-      const record = upsertKasaDevice(uniqueId, device.host, device.alias, type, device.model ?? null);
+      const record = upsertKasaDevice(uniqueId, d.host, d.alias, type, d.model ?? null);
       found.push(record);
 
       // Fetch initial state
-      fetchKasaDeviceState(uniqueId, device.host, childId).catch(() => {});
+      fetchKasaDeviceState(uniqueId, d.host, child).catch(() => {});
     });
 
     setTimeout(() => {

@@ -132,6 +132,15 @@ db.exec(`
     last_synced TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (device, sku)
   );
+
+  CREATE TABLE IF NOT EXISTS dreams (
+    id TEXT PRIMARY KEY,
+    model TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    cost REAL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL
+  );
 `);
 
 // --- Migrations (safe to run repeatedly) ---
@@ -160,7 +169,7 @@ export interface DeviceInfo {
   on?: boolean;
   brightness?: number;
   color?: string;
-  source?: "mock" | "govee";
+  source?: "mock" | "govee" | "kasa";
   // Lock fields
   locked?: boolean;
   // Thermostat fields
@@ -628,7 +637,6 @@ const SKU_TYPE_MAP: Record<string, string> = {
   H6143: "light_strip",
   H6144: "light_strip",
   H6148: "light_strip",
-  H615: "light_strip",
   H620: "light_strip",
   H700: "heater",
   H7012: "thermometer",
@@ -795,7 +803,7 @@ export function getPinnedMemories(): Memory[] {
 export function addMemory(id: string, content: string, category = "general"): Memory {
   const now = new Date().toISOString();
   db.prepare("INSERT INTO memories (id, content, category, created_at) VALUES (?, ?, ?, ?)").run(id, content, category, now);
-  return { id, content, category, pinned: false, createdAt: now };
+  return { id, content, category, pinned: false, createdAt: now, deletedAt: null };
 }
 
 /** Update a memory's content. Returns the updated memory, or null if not found / soft-deleted. */
@@ -1008,6 +1016,55 @@ export function updateTask(id: string, data: { title?: string; description?: str
 
 export function deleteTask(id: string): boolean {
   return db.prepare("DELETE FROM tasks WHERE id = ?").run(id).changes > 0;
+}
+
+// ============================================================
+// Dreams
+// ============================================================
+
+export interface Dream {
+  id: string;
+  model: string;
+  summary: string;
+  cost: number | null;
+  startedAt: string;
+  completedAt: string;
+}
+
+interface RawDream {
+  id: string;
+  model: string;
+  summary: string;
+  cost: number | null;
+  started_at: string;
+  completed_at: string;
+}
+
+function mapDream(row: RawDream): Dream {
+  return {
+    id: row.id,
+    model: row.model,
+    summary: row.summary,
+    cost: row.cost,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  };
+}
+
+export function getDreams(limit = 20): Dream[] {
+  return (db.prepare("SELECT * FROM dreams ORDER BY started_at DESC LIMIT ?").all(limit) as RawDream[]).map(mapDream);
+}
+
+export function getDream(id: string): Dream | null {
+  const row = db.prepare("SELECT * FROM dreams WHERE id = ?").get(id) as RawDream | undefined;
+  return row ? mapDream(row) : null;
+}
+
+export function addDream(id: string, model: string, summary: string, cost: number | null, startedAt: string, completedAt: string): Dream {
+  db.prepare(
+    "INSERT INTO dreams (id, model, summary, cost, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(id, model, summary, cost, startedAt, completedAt);
+  return { id, model, summary, cost, startedAt, completedAt };
 }
 
 export default db;

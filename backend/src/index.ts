@@ -87,6 +87,26 @@ app.route("/", tasksRoutes);
 // Health check
 app.get("/health", (c) => c.json({ ok: true }));
 
+// --- Read receipt debounce ---
+// Collect incoming read IDs and broadcast in a single batch after a short delay.
+let pendingReadIds = new Set<string>();
+let readDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const READ_DEBOUNCE_MS = 500;
+
+function enqueueReadReceipts(ids: string[]) {
+  for (const id of ids) pendingReadIds.add(id);
+  if (readDebounceTimer) return; // already scheduled
+  readDebounceTimer = setTimeout(() => {
+    if (pendingReadIds.size > 0) {
+      const batch = Array.from(pendingReadIds);
+      pendingReadIds = new Set();
+      log(`[server] Read receipt batch: ${batch.length} message(s)`);
+      broadcastEvent({ event: "read", messageIds: batch });
+    }
+    readDebounceTimer = null;
+  }, READ_DEBOUNCE_MS);
+}
+
 // WebSocket endpoint
 app.get(
   "/ws",
@@ -102,8 +122,7 @@ app.get(
         const data = JSON.parse(raw);
         // Handle events from clients
         if (data.event === "read" && Array.isArray(data.messageIds)) {
-          log(`[server] Read receipt for ${data.messageIds.length} message(s)`);
-          broadcastEvent({ event: "read", messageIds: data.messageIds });
+          enqueueReadReceipts(data.messageIds);
         } else if (data.event === "device_control") {
           log(`[server] Device control: ${data.deviceId} ${data.action}`, JSON.stringify(data.params));
           handleDeviceControl(data.deviceId, data.action, data.params ?? {});
