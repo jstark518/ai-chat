@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import {
   getLights, updateLight, updateLightRoom,
   getThermostat, updateThermostat,
-  getLocks, updateLock,
   getSensors, updateSensor,
   getScenes, getScene,
   getGoveeDevices, getGoveeDevice, updateGoveeDeviceRoom, updateGoveeDeviceState,
@@ -119,8 +118,9 @@ export function parseGoveeId(id: string): { sku: string; device: string } | null
 // Scene Application Logic
 // ============================================================
 
-/** Set a single unified light by ID (mock, govee, or kasa). Handles API calls + cache + broadcast. */
-async function setUnifiedLight(id: string, data: { on?: boolean; brightness?: number; color?: string }): Promise<void> {
+/** Set a single unified light by ID (mock, govee, or kasa). Handles API calls + cache + broadcast.
+ *  Returns true on success, false if the underlying API call failed. */
+async function setUnifiedLight(id: string, data: { on?: boolean; brightness?: number; color?: string }): Promise<boolean> {
   const stateUpdate: Record<string, unknown> = {};
   if (data.on !== undefined) stateUpdate.on = data.on;
   if (data.brightness !== undefined) stateUpdate.brightness = data.brightness;
@@ -136,32 +136,38 @@ async function setUnifiedLight(id: string, data: { on?: boolean; brightness?: nu
       if (data.on !== undefined) cached.powerSwitch = data.on ? 1 : 0;
       if (data.brightness !== undefined) cached.brightness = data.brightness;
       updateGoveeDeviceState(govee.device, govee.sku, cached);
+      broadcastEvent({ event: "device_state_update", deviceId: id, state: stateUpdate });
+      return true;
     } catch (err) {
       log(`[smarthome] Govee error for ${id}: ${err}`);
+      return false;
     }
-    broadcastEvent({ event: "device_state_update", deviceId: id, state: stateUpdate });
-    return;
   }
 
   const kasaId = parseKasaId(id);
   if (kasaId) {
     try {
       if (data.on !== undefined) await kasaTurnOnOff(kasaId, data.on);
+      broadcastEvent({ event: "device_state_update", deviceId: id, state: stateUpdate });
+      return true;
     } catch (err) {
       log(`[smarthome] Kasa error for ${id}: ${err}`);
+      return false;
     }
-    broadcastEvent({ event: "device_state_update", deviceId: id, state: stateUpdate });
-    return;
   }
 
-  // Mock
+  // Mock (synchronous, cannot fail)
   updateLight(id, data);
   broadcastEvent({ event: "device_state_update", deviceId: id, state: stateUpdate });
+  return true;
 }
 
-/** Set multiple lights in parallel. */
-async function setUnifiedLightsBatch(updates: Array<{ id: string; data: { on?: boolean; brightness?: number; color?: string } }>): Promise<void> {
-  await Promise.allSettled(updates.map(({ id, data }) => setUnifiedLight(id, data)));
+/** Set multiple lights in parallel. Returns array of IDs whose API calls failed. */
+async function setUnifiedLightsBatch(updates: Array<{ id: string; data: { on?: boolean; brightness?: number; color?: string } }>): Promise<string[]> {
+  const results = await Promise.all(
+    updates.map(async ({ id, data }) => ({ id, ok: await setUnifiedLight(id, data) }))
+  );
+  return results.filter((r) => !r.ok).map((r) => r.id);
 }
 
 export function applyScene(scene: Scene): void {
@@ -170,23 +176,25 @@ export function applyScene(scene: Scene): void {
 
   if (scene.name === "Good Night" || scene.name === "Away") {
     // Turn off all lights in parallel
-    setUnifiedLightsBatch(allLights.map((l) => ({ id: l.id, data: { on: false } }))).catch(() => {});
-    for (const l of getLocks()) {
-      updateLock(l.id, true);
-      broadcastEvent({ event: "device_state_update", deviceId: l.id, state: { locked: true } });
-    }
+    setUnifiedLightsBatch(allLights.map((l) => ({ id: l.id, data: { on: false } }))).then((failed) => {
+      if (failed.length > 0) log(`[smarthome] Scene "${scene.name}": ${failed.length} device(s) failed: ${failed.join(", ")}`);
+    });
     updateThermostat({ targetTemp: scene.name === "Away" ? 65 : 68, mode: "auto" });
   } else if (scene.name === "Good Morning") {
     setUnifiedLightsBatch([
       { id: "light-5", data: { on: true, brightness: 100 } },
       { id: "light-1", data: { on: true, brightness: 80 } },
-    ]).catch(() => {});
+    ]).then((failed) => {
+      if (failed.length > 0) log(`[smarthome] Scene "${scene.name}": ${failed.length} device(s) failed: ${failed.join(", ")}`);
+    });
     updateThermostat({ targetTemp: 72, mode: "auto" });
   } else if (scene.name === "Movie Time") {
     setUnifiedLightsBatch([
       ...allLights.map((l) => ({ id: l.id, data: { on: false } })),
       { id: "light-2", data: { on: true, brightness: 20, color: "#FFD700" } },
-    ]).catch(() => {});
+    ]).then((failed) => {
+      if (failed.length > 0) log(`[smarthome] Scene "${scene.name}": ${failed.length} device(s) failed: ${failed.join(", ")}`);
+    });
   }
 }
 
@@ -227,8 +235,11 @@ export function registerSmartHomeTools(server: McpServer): void {
     },
     async ({ id, on, brightness, color }) => {
       log("[mcp] Tool called: set_light", JSON.stringify({ id, on, brightness, color }));
-      await setUnifiedLight(id, { on, brightness, color });
-      return { content: [{ type: "text" as const, text: `Light ${id} updated: ${JSON.stringify({ on, brightness, color })}` }] };
+      const ok = await setUnifiedLight(id, { on, brightness, color });
+      const text = ok
+        ? `Light ${id} updated: ${JSON.stringify({ on, brightness, color })}`
+        : `Light ${id} update FAILED (API error) — device may not have responded`;
+      return { content: [{ type: "text" as const, text }] };
     }
   );
 
@@ -245,8 +256,11 @@ export function registerSmartHomeTools(server: McpServer): void {
     async ({ ids, on, brightness, color }) => {
       log("[mcp] Tool called: set_lights", JSON.stringify({ ids, on, brightness, color }));
       const data = { on, brightness, color };
-      await setUnifiedLightsBatch(ids.map((id) => ({ id, data })));
-      return { content: [{ type: "text" as const, text: `Updated ${ids.length} light(s) in parallel` }] };
+      const failed = await setUnifiedLightsBatch(ids.map((id) => ({ id, data })));
+      const text = failed.length === 0
+        ? `Updated ${ids.length} light(s) successfully`
+        : `Updated ${ids.length - failed.length}/${ids.length} light(s). ${failed.length} failed (API error): ${failed.join(", ")}`;
+      return { content: [{ type: "text" as const, text }] };
     }
   );
 
@@ -289,12 +303,13 @@ export function registerSmartHomeTools(server: McpServer): void {
     {},
     async () => {
       log("[mcp] Tool called: get_all_devices");
+      const sensors = getSensors();
+      const scenes = getScenes();
       const summary: Record<string, unknown> = {
         lights: getAllUnifiedLights(),
         thermostat: getThermostat(),
-        locks: getLocks(),
-        sensors: getSensors(),
-        scenes: getScenes(),
+        ...(sensors.length > 0 && { sensors }),
+        ...(scenes.length > 0 && { scenes }),
       };
 
       const goveeDevices = getGoveeDevices();
@@ -369,16 +384,6 @@ export function registerSmartHomeTools(server: McpServer): void {
         }
       }
 
-      // Locks
-      if (!room) {
-        for (const lock of getLocks()) {
-          devices.push({
-            id: lock.id, name: lock.name, deviceType: "lock",
-            locked: lock.locked,
-          });
-        }
-      }
-
       // Sensors
       const sensors = getSensors(undefined, room);
       for (const s of sensors) {
@@ -449,33 +454,6 @@ export function registerSmartHomeTools(server: McpServer): void {
     }
   );
 
-  // --- get_locks ---
-  server.tool(
-    "get_locks",
-    "Get the status of all door locks.",
-    {},
-    async () => {
-      log("[mcp] Tool called: get_locks");
-      return { content: [{ type: "text" as const, text: JSON.stringify(getLocks()) }] };
-    }
-  );
-
-  // --- set_lock ---
-  server.tool(
-    "set_lock",
-    "Lock or unlock a door.",
-    {
-      id: z.string().describe("The lock ID (e.g. 'lock-1')"),
-      locked: z.boolean().describe("true to lock, false to unlock"),
-    },
-    async ({ id, locked }) => {
-      log("[mcp] Tool called: set_lock", JSON.stringify({ id, locked }));
-      const lock = updateLock(id, locked);
-      if (!lock) return { content: [{ type: "text" as const, text: `Lock '${id}' not found` }] };
-      broadcastEvent({ event: "device_state_update", deviceId: id, state: { locked } });
-      return { content: [{ type: "text" as const, text: JSON.stringify(lock) }] };
-    }
-  );
 
   // --- get_sensors ---
   server.tool(

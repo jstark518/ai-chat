@@ -121,6 +121,17 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS agent_runs (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK(type IN ('reply','proactive')),
+    model TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    cost REAL,
+    trigger_reason TEXT,
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS govee_devices (
     device TEXT NOT NULL,
     sku TEXT NOT NULL,
@@ -141,6 +152,16 @@ db.exec(`
     started_at TEXT NOT NULL,
     completed_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS code_changes (
+    id TEXT PRIMARY KEY,
+    model TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    files_changed TEXT NOT NULL DEFAULT '[]',
+    cost REAL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL
+  );
 `);
 
 // --- Migrations (safe to run repeatedly) ---
@@ -151,6 +172,7 @@ const migrations = [
   "ALTER TABLE messages ADD COLUMN devices TEXT",
   "ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE memories ADD COLUMN deleted_at TEXT",
+  "ALTER TABLE scheduled_callbacks ADD COLUMN reschedule_count INTEGER NOT NULL DEFAULT 0",
 ];
 for (const sql of migrations) {
   try { db.exec(sql); } catch { /* column already exists */ }
@@ -848,6 +870,7 @@ export interface ScheduledCallback {
   fireAt: string;
   fired: boolean;
   createdAt: string;
+  rescheduleCount: number;
 }
 
 interface RawScheduledCallback {
@@ -856,16 +879,22 @@ interface RawScheduledCallback {
   fire_at: string;
   fired: number;
   created_at: string;
+  reschedule_count: number;
 }
 
 function mapCallback(row: RawScheduledCallback): ScheduledCallback {
-  return { id: row.id, reason: row.reason, fireAt: row.fire_at, fired: row.fired === 1, createdAt: row.created_at };
+  return { id: row.id, reason: row.reason, fireAt: row.fire_at, fired: row.fired === 1, createdAt: row.created_at, rescheduleCount: row.reschedule_count };
 }
 
-export function addScheduledCallback(id: string, reason: string, fireAt: string): ScheduledCallback {
+export function addScheduledCallback(id: string, reason: string, fireAt: string, rescheduleCount = 0): ScheduledCallback {
   const now = new Date().toISOString();
-  db.prepare("INSERT INTO scheduled_callbacks (id, reason, fire_at, created_at) VALUES (?, ?, ?, ?)").run(id, reason, fireAt, now);
-  return { id, reason, fireAt, fired: false, createdAt: now };
+  db.prepare("INSERT INTO scheduled_callbacks (id, reason, fire_at, created_at, reschedule_count) VALUES (?, ?, ?, ?, ?)").run(id, reason, fireAt, now, rescheduleCount);
+  return { id, reason, fireAt, fired: false, createdAt: now, rescheduleCount };
+}
+
+export function getCallbackById(id: string): ScheduledCallback | null {
+  const row = db.prepare("SELECT * FROM scheduled_callbacks WHERE id = ?").get(id) as RawScheduledCallback | undefined;
+  return row ? mapCallback(row) : null;
 }
 
 export function getPendingCallbacks(): ScheduledCallback[] {
@@ -877,12 +906,31 @@ export function getAllCallbacks(): ScheduledCallback[] {
   return (db.prepare("SELECT * FROM scheduled_callbacks ORDER BY fire_at ASC").all() as RawScheduledCallback[]).map(mapCallback);
 }
 
+/** Returns all pending (unfired) callbacks plus fired ones created within the last N days.
+ *  Avoids returning the full historical log (which grows unboundedly) to keep tool output small. */
+export function getRecentCallbacks(firedWindowDays = 7): ScheduledCallback[] {
+  const cutoff = new Date(Date.now() - firedWindowDays * 24 * 60 * 60 * 1000).toISOString();
+  return (db.prepare(
+    "SELECT * FROM scheduled_callbacks WHERE fired = 0 OR created_at >= ? ORDER BY fire_at ASC"
+  ).all(cutoff) as RawScheduledCallback[]).map(mapCallback);
+}
+
 export function markCallbackFired(id: string): void {
   db.prepare("UPDATE scheduled_callbacks SET fired = 1 WHERE id = ?").run(id);
 }
 
 export function deleteCallback(id: string): boolean {
   return db.prepare("DELETE FROM scheduled_callbacks WHERE id = ?").run(id).changes > 0;
+}
+
+/** Count how many callbacks with the exact same reason have been fired within the last N hours.
+ *  Used to detect runaway reschedule cascades and enforce a code-level cap. */
+export function countRecentFiredCallbacksByReason(reason: string, windowHours = 24): number {
+  const cutoff = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
+  const row = db.prepare(
+    "SELECT COUNT(*) as cnt FROM scheduled_callbacks WHERE reason = ? AND fired = 1 AND created_at >= ?"
+  ).get(reason, cutoff) as { cnt: number };
+  return row.cnt;
 }
 
 // ============================================================
@@ -1065,6 +1113,114 @@ export function addDream(id: string, model: string, summary: string, cost: numbe
     "INSERT INTO dreams (id, model, summary, cost, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?)"
   ).run(id, model, summary, cost, startedAt, completedAt);
   return { id, model, summary, cost, startedAt, completedAt };
+}
+
+// ============================================================
+// Agent Runs (reply + proactive history)
+// ============================================================
+
+export interface AgentRun {
+  id: string;
+  type: "reply" | "proactive";
+  model: string;
+  summary: string;
+  cost: number | null;
+  triggerReason: string | null;
+  startedAt: string;
+  completedAt: string;
+}
+
+interface RawAgentRun {
+  id: string;
+  type: "reply" | "proactive";
+  model: string;
+  summary: string;
+  cost: number | null;
+  trigger_reason: string | null;
+  started_at: string;
+  completed_at: string;
+}
+
+function mapAgentRun(row: RawAgentRun): AgentRun {
+  return {
+    id: row.id,
+    type: row.type,
+    model: row.model,
+    summary: row.summary,
+    cost: row.cost,
+    triggerReason: row.trigger_reason,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  };
+}
+
+export function getAgentRuns(type?: "reply" | "proactive", limit = 20): AgentRun[] {
+  if (type) {
+    return (db.prepare("SELECT * FROM agent_runs WHERE type = ? ORDER BY started_at DESC LIMIT ?").all(type, limit) as RawAgentRun[]).map(mapAgentRun);
+  }
+  return (db.prepare("SELECT * FROM agent_runs ORDER BY started_at DESC LIMIT ?").all(limit) as RawAgentRun[]).map(mapAgentRun);
+}
+
+export function addAgentRun(
+  id: string, type: "reply" | "proactive", model: string, summary: string,
+  cost: number | null, triggerReason: string | null, startedAt: string, completedAt: string
+): AgentRun {
+  db.prepare(
+    "INSERT INTO agent_runs (id, type, model, summary, cost, trigger_reason, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(id, type, model, summary, cost, triggerReason, startedAt, completedAt);
+  return { id, type, model, summary, cost, triggerReason, startedAt, completedAt };
+}
+
+// ============================================================
+// Code Changes (changelog)
+// ============================================================
+
+export interface CodeChange {
+  id: string;
+  model: string;
+  summary: string;
+  filesChanged: string[];
+  cost: number | null;
+  startedAt: string;
+  completedAt: string;
+}
+
+interface RawCodeChange {
+  id: string;
+  model: string;
+  summary: string;
+  files_changed: string;
+  cost: number | null;
+  started_at: string;
+  completed_at: string;
+}
+
+function mapCodeChange(row: RawCodeChange): CodeChange {
+  let filesChanged: string[] = [];
+  try { filesChanged = JSON.parse(row.files_changed); } catch { /* ignore */ }
+  return {
+    id: row.id,
+    model: row.model,
+    summary: row.summary,
+    filesChanged,
+    cost: row.cost,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  };
+}
+
+export function getCodeChanges(limit = 20): CodeChange[] {
+  return (db.prepare("SELECT * FROM code_changes ORDER BY started_at DESC LIMIT ?").all(limit) as RawCodeChange[]).map(mapCodeChange);
+}
+
+export function addCodeChange(
+  id: string, model: string, summary: string, filesChanged: string[],
+  cost: number | null, startedAt: string, completedAt: string
+): CodeChange {
+  db.prepare(
+    "INSERT INTO code_changes (id, model, summary, files_changed, cost, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(id, model, summary, JSON.stringify(filesChanged), cost, startedAt, completedAt);
+  return { id, model, summary, filesChanged, cost, startedAt, completedAt };
 }
 
 export default db;

@@ -6,9 +6,9 @@ import { randomUUID } from "node:crypto";
 import {
   insertMessage, getMessages, getLocation,
   addMemory, getMemories, deleteMemory, updateMemory, searchMemories, setMemoryPinned,
-  addScheduledCallback, getAllCallbacks, deleteCallback,
+  addScheduledCallback, getCallbackById, getAllCallbacks, getRecentCallbacks, deleteCallback, markCallbackFired, countRecentFiredCallbacksByReason,
   getTasks, addTask, updateTask, deleteTask, type TaskStatus,
-  getSetting, setSetting, getDreams,
+  getSetting, setSetting, getDreams, getAgentRuns, getCodeChanges,
 } from "./db.js";
 import type { Message } from "./db.js";
 import { broadcast, broadcastEvent } from "./ws.js";
@@ -16,6 +16,7 @@ import { log } from "./logger.js";
 import { registerSmartHomeTools } from "./smarthome.js";
 import { DEFAULT_REPLY_PROMPT, DEFAULT_PROACTIVE_PROMPT, DEFAULT_DREAM_PROMPT } from "./agent.js";
 import { registerWebTools } from "./web-tools.js";
+import { registerCodeTools } from "./code-tools.js";
 
 /** Simple line-based diff for logging minor memory edits. */
 function lineDiff(oldText: string, newText: string): string {
@@ -134,6 +135,10 @@ function createMCPServer(): McpServer {
     { question: z.string().describe("The question to ask the user") },
     async ({ question }) => {
       log("[mcp] Tool called: ask_question", JSON.stringify({ question }));
+      if (/\block(s|ed|ing)?\b/i.test(question)) {
+        log("[mcp] ask_question BLOCKED — contains banned word");
+        return { content: [{ type: "text" as const, text: "Question BLOCKED — contained a banned word and was NOT delivered. Do not ask about that topic." }] };
+      }
       const messageId = randomUUID();
       const message: Message = {
         id: messageId,
@@ -166,6 +171,10 @@ function createMCPServer(): McpServer {
     },
     async ({ question, options }) => {
       log("[mcp] Tool called: ask_multiple_choice", JSON.stringify({ question, options }));
+      if (/\block(s|ed|ing)?\b/i.test(question)) {
+        log("[mcp] ask_multiple_choice BLOCKED — contains banned word");
+        return { content: [{ type: "text" as const, text: "Question BLOCKED — contained a banned word and was NOT delivered. Do not ask about that topic." }] };
+      }
       const messageId = randomUUID();
       const message: Message = {
         id: messageId,
@@ -196,6 +205,10 @@ function createMCPServer(): McpServer {
     { content: z.string().describe("The message text to send") },
     async ({ content }) => {
       log("[mcp] Tool called: send_message", JSON.stringify({ content }));
+      if (/\block(s|ed|ing)?\b/i.test(content)) {
+        log("[mcp] send_message BLOCKED — contains 'lock'");
+        return { content: [{ type: "text" as const, text: "Message BLOCKED — your message contained a banned word and was NOT delivered to the user. Rephrase without any reference to that topic and call send_message again, or the user will receive nothing." }] };
+      }
       const message: Message = {
         id: randomUUID(),
         role: "assistant",
@@ -352,6 +365,10 @@ function createMCPServer(): McpServer {
     },
     async ({ content, category }) => {
       log("[mcp] Tool called: remember", JSON.stringify({ content, category }));
+      if (/\block(s|ed|ing)?\b/i.test(content)) {
+        log("[mcp] remember BLOCKED — contains 'lock'");
+        return { content: [{ type: "text" as const, text: "Memory BLOCKED — content contained a banned word and was NOT saved. Do not store memories about that topic." }] };
+      }
       addMemory(randomUUID(), content, category);
       return {
         content: [{ type: "text" as const, text: `Remembered (${category}): "${content.slice(0, 100)}"` }],
@@ -407,6 +424,10 @@ function createMCPServer(): McpServer {
     },
     async ({ id, content }) => {
       log("[mcp] Tool called: edit_memory", JSON.stringify({ id, contentLength: content.length }));
+      if (/\block(s|ed|ing)?\b/i.test(content)) {
+        log("[mcp] edit_memory BLOCKED — contains 'lock'");
+        return { content: [{ type: "text" as const, text: "Edit BLOCKED — content contained a banned word and was NOT saved. Do not store memories about that topic." }] };
+      }
 
       // Look up old content BEFORE updating so we can diff
       const existing = getMemories(undefined, true).find((m) => m.id === id);
@@ -478,11 +499,11 @@ function createMCPServer(): McpServer {
   // --- list_callbacks ---
   server.tool(
     "list_callbacks",
-    "List all scheduled callbacks (pending and fired).",
+    "List scheduled callbacks: all pending (unfired) ones plus fired ones from the last 7 days. Old fired callbacks are omitted to keep output concise.",
     {},
     async () => {
       log("[mcp] Tool called: list_callbacks");
-      const callbacks = getAllCallbacks();
+      const callbacks = getRecentCallbacks();
       return {
         content: [{ type: "text" as const, text: callbacks.length > 0 ? JSON.stringify(callbacks) : "No callbacks scheduled" }],
       };
@@ -559,6 +580,45 @@ function createMCPServer(): McpServer {
     }
   );
 
+  // --- get_agent_history ---
+  server.tool(
+    "get_agent_history",
+    "Read recent reply and proactive agent run history. Each entry includes the agent's text output, model used, cost, trigger reason, and timestamps. Filter by type to see only reply or proactive runs.",
+    {
+      type: z.enum(["reply", "proactive"]).optional().describe("Filter by agent type (omit for both)"),
+      limit: z.number().min(1).max(50).optional().describe("Number of recent runs to return (default 10)"),
+    },
+    async ({ type, limit }) => {
+      log("[mcp] Tool called: get_agent_history", JSON.stringify({ type, limit }));
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const runs = getAgentRuns(type, limit ?? 10).map((r) => ({
+        ...r,
+        localStartedAt: new Date(r.startedAt).toLocaleString("en-US", { timeZone: tz }),
+        localCompletedAt: new Date(r.completedAt).toLocaleString("en-US", { timeZone: tz }),
+      }));
+      return { content: [{ type: "text" as const, text: JSON.stringify(runs) }] };
+    }
+  );
+
+  // --- get_code_changelog ---
+  server.tool(
+    "get_code_changelog",
+    "Read the history of automated code changes made by the code agent. Returns summaries, files modified, and timestamps. Use this to avoid repeating fixes that were already applied.",
+    {
+      limit: z.number().min(1).max(50).optional().describe("Number of recent changes to return (default 10)"),
+    },
+    async ({ limit }) => {
+      log("[mcp] Tool called: get_code_changelog", JSON.stringify({ limit }));
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const changes = getCodeChanges(limit ?? 10).map((c) => ({
+        ...c,
+        localStartedAt: new Date(c.startedAt).toLocaleString("en-US", { timeZone: tz }),
+        localCompletedAt: new Date(c.completedAt).toLocaleString("en-US", { timeZone: tz }),
+      }));
+      return { content: [{ type: "text" as const, text: JSON.stringify(changes) }] };
+    }
+  );
+
   // --- list_tasks ---
   server.tool(
     "list_tasks",
@@ -629,6 +689,9 @@ function createMCPServer(): McpServer {
 
   // --- Web Tools ---
   registerWebTools(server);
+
+  // --- Code Tools ---
+  registerCodeTools(server);
 
   return server;
 }

@@ -15,7 +15,7 @@ import tasksRoutes from "./routes/tasks.js";
 import { addClient, removeClient } from "./ws.js";
 import { startAgentLoop, nudge as nudgeAgent } from "./agent.js";
 import { initMCP, resolveUserResponse, resolveLocationRequest } from "./mcp.js";
-import { insertMessage, updateLight, updateLock, updateThermostat, logToolCall, upsertLocation } from "./db.js";
+import { insertMessage, updateLight, updateThermostat, logToolCall, upsertLocation } from "./db.js";
 import { broadcast, broadcastEvent } from "./ws.js";
 import { randomUUID } from "node:crypto";
 import { log, warn, error as logError } from "./logger.js";
@@ -51,9 +51,6 @@ async function handleDeviceControl(deviceId: string, action: string, params: Rec
     } else if (action === "brightness") {
       updateLight(deviceId, { brightness: params.brightness as number });
       stateUpdate.brightness = params.brightness;
-    } else if (action === "lock") {
-      updateLock(deviceId, params.locked as boolean);
-      stateUpdate.locked = params.locked;
     } else if (action === "thermostat") {
       if (params.targetTemp !== undefined) stateUpdate.targetTemp = params.targetTemp;
       if (params.mode !== undefined) stateUpdate.mode = params.mode;
@@ -112,7 +109,6 @@ app.get(
   "/ws",
   upgradeWebSocket(() => ({
     onOpen(_event, ws) {
-      log("[server] WebSocket connection opened");
       addClient(ws);
     },
     onMessage(event, _ws) {

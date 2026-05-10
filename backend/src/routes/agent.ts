@@ -7,7 +7,7 @@ import {
   getSetting, setSetting,
 } from "../db.js";
 import { log } from "../logger.js";
-import { setProactiveInterval, DEFAULT_REPLY_PROMPT, DEFAULT_PROACTIVE_PROMPT, DEFAULT_DREAM_PROMPT, getNextTickAt, isAgentRunning, triggerDream } from "../agent.js";
+import { setProactiveInterval, DEFAULT_REPLY_PROMPT, DEFAULT_PROACTIVE_PROMPT, DEFAULT_DREAM_PROMPT, DEFAULT_CODE_PROMPT, getNextTickAt, isAgentRunning, triggerDream, triggerProactive, triggerCodeAgent } from "../agent.js";
 
 const agent = new Hono();
 
@@ -96,15 +96,17 @@ agent.get("/api/agent/config", (c) => {
   const replyPrompt = getSetting("reply_prompt") ?? getSetting("system_prompt") ?? DEFAULT_REPLY_PROMPT;
   const proactivePrompt = getSetting("proactive_prompt") ?? getSetting("system_prompt") ?? DEFAULT_PROACTIVE_PROMPT;
   const dreamPrompt = getSetting("dream_prompt") ?? DEFAULT_DREAM_PROMPT;
+  const codePrompt = getSetting("code_prompt") ?? DEFAULT_CODE_PROMPT;
   // Per-type models with fallback to legacy tick_model → agent_model
   const replyModel = getSetting("reply_model") ?? getSetting("tick_model") ?? legacyModel;
   const proactiveModel = getSetting("proactive_model") ?? getSetting("tick_model") ?? legacyModel;
   const dreamModel = getSetting("dream_model") ?? legacyModel;
+  const codeModel = getSetting("code_model") ?? legacyModel;
   const nextTickAt = getNextTickAt();
   const running = isAgentRunning();
   return c.json({
-    intervalMs, replyPrompt, proactivePrompt, dreamPrompt,
-    replyModel, proactiveModel, dreamModel,
+    intervalMs, replyPrompt, proactivePrompt, dreamPrompt, codePrompt,
+    replyModel, proactiveModel, dreamModel, codeModel,
     // Back-compat aliases
     systemPrompt: replyPrompt, model: replyModel, tickModel: replyModel,
     nextTickAt, running,
@@ -117,9 +119,11 @@ agent.put("/api/agent/config", async (c) => {
     replyPrompt?: string;
     proactivePrompt?: string;
     dreamPrompt?: string;
+    codePrompt?: string;
     replyModel?: string;
     proactiveModel?: string;
     dreamModel?: string;
+    codeModel?: string;
     // Back-compat
     systemPrompt?: string;
     model?: string;
@@ -130,6 +134,7 @@ agent.put("/api/agent/config", async (c) => {
     replyPrompt: body.replyPrompt ? `(${body.replyPrompt.length} chars)` : undefined,
     proactivePrompt: body.proactivePrompt ? `(${body.proactivePrompt.length} chars)` : undefined,
     dreamPrompt: body.dreamPrompt ? `(${body.dreamPrompt.length} chars)` : undefined,
+    codePrompt: (body as Record<string,unknown>).codePrompt ? `(${((body as Record<string,unknown>).codePrompt as string).length} chars)` : undefined,
     systemPrompt: body.systemPrompt ? `(${body.systemPrompt.length} chars)` : undefined,
   }));
   if (body.intervalMs !== undefined) {
@@ -140,10 +145,12 @@ agent.put("/api/agent/config", async (c) => {
   if (body.replyPrompt !== undefined) setSetting("reply_prompt", body.replyPrompt);
   if (body.proactivePrompt !== undefined) setSetting("proactive_prompt", body.proactivePrompt);
   if (body.dreamPrompt !== undefined) setSetting("dream_prompt", body.dreamPrompt);
+  if (body.codePrompt !== undefined) setSetting("code_prompt", body.codePrompt);
   // Per-type models
   if (body.replyModel !== undefined) setSetting("reply_model", body.replyModel);
   if (body.proactiveModel !== undefined) setSetting("proactive_model", body.proactiveModel);
   if (body.dreamModel !== undefined) setSetting("dream_model", body.dreamModel);
+  if (body.codeModel !== undefined) setSetting("code_model", body.codeModel);
   // Back-compat: systemPrompt → reply_prompt
   if (body.systemPrompt !== undefined) {
     setSetting("system_prompt", body.systemPrompt);
@@ -175,6 +182,28 @@ agent.post("/api/agent/dream", async (c) => {
   // Run in background so the request doesn't hang
   triggerDream(true).catch((err) => log(`[routes] Dream mode error: ${err}`));
   return c.json({ ok: true, message: "Dream mode started" });
+});
+
+// --- Manual Proactive Run ---
+
+agent.post("/api/agent/proactive", (c) => {
+  log("[routes] POST /api/agent/proactive — triggering proactive run");
+  if (!triggerProactive) {
+    return c.json({ error: "Agent not initialized" }, 500);
+  }
+  triggerProactive();
+  return c.json({ ok: true, message: "Proactive run triggered" });
+});
+
+// --- Manual Code Review ---
+
+agent.post("/api/agent/code-review", (c) => {
+  log("[routes] POST /api/agent/code-review — triggering code review");
+  if (!triggerCodeAgent) {
+    return c.json({ error: "Agent not initialized" }, 500);
+  }
+  triggerCodeAgent(true).catch((err) => log(`[routes] Code review error: ${err}`));
+  return c.json({ ok: true, message: "Code review started" });
 });
 
 export default agent;

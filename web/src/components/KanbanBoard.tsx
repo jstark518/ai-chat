@@ -81,7 +81,7 @@ export function KanbanBoard({ compact = false }: Props) {
                   onDragStart={(e) => handleDragStart(e, t.id)}
                   onDragEnd={() => { setDraggingId(null); setHoverColumn(null); }}
                   onDelete={() => deleteTask(t.id)}
-                  onEdit={(title) => updateTask(t.id, { title })}
+                  onEdit={(title, description) => updateTask(t.id, { title, description })}
                 />
               ))}
             </div>
@@ -108,17 +108,34 @@ interface TaskCardProps {
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
   onDelete: () => void;
-  onEdit: (title: string) => void;
+  onEdit: (title: string, description: string | null) => void;
 }
 
 function TaskCard({ task, compact, dragging, onDragStart, onDragEnd, onDelete, onEdit }: TaskCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
+  const [draftDesc, setDraftDesc] = useState(task.description ?? "");
+
+  const startEditing = () => {
+    setDraft(task.title);
+    setDraftDesc(task.description ?? "");
+    setEditing(true);
+  };
 
   const commit = () => {
-    const next = draft.trim();
-    if (next && next !== task.title) onEdit(next);
-    else setDraft(task.title);
+    const nextTitle = draft.trim();
+    const nextDesc = draftDesc.trim() || null;
+    if (nextTitle) {
+      onEdit(nextTitle, nextDesc);
+    } else {
+      setDraft(task.title);
+    }
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(task.title);
+    setDraftDesc(task.description ?? "");
     setEditing(false);
   };
 
@@ -129,7 +146,7 @@ function TaskCard({ task, compact, dragging, onDragStart, onDragEnd, onDelete, o
       onDragEnd={onDragEnd}
       className={`group bg-gray-900 border border-gray-700 rounded-lg ${compact ? "p-1.5" : "p-2"} ${
         dragging ? "opacity-30" : ""
-      } hover:border-gray-600 cursor-grab active:cursor-grabbing`}
+      } hover:border-gray-600 ${editing ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
     >
       <div className="flex items-start justify-between gap-1">
         {editing ? (
@@ -137,17 +154,17 @@ function TaskCard({ task, compact, dragging, onDragStart, onDragEnd, onDelete, o
             value={draft}
             autoFocus
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
             onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") { setDraft(task.title); setEditing(false); }
+              if (e.key === "Enter") { e.preventDefault(); commit(); }
+              if (e.key === "Escape") cancel();
             }}
             className="flex-1 bg-gray-800 border border-blue-500 rounded px-1.5 py-0.5 text-xs text-gray-100 focus:outline-none"
           />
         ) : (
           <button
-            onClick={() => setEditing(true)}
-            className={`flex-1 text-left text-gray-100 ${compact ? "text-[11px]" : "text-xs"} leading-snug break-words`}
+            onClick={startEditing}
+            className={`flex-1 text-left text-gray-100 ${compact ? "text-[11px]" : "text-xs"} leading-snug break-words hover:text-white`}
+            title="Click to edit"
           >
             {task.title}
           </button>
@@ -160,8 +177,31 @@ function TaskCard({ task, compact, dragging, onDragStart, onDragEnd, onDelete, o
           ✕
         </button>
       </div>
-      {task.description && !editing && (
-        <p className={`text-gray-500 mt-1 ${compact ? "text-[10px]" : "text-[11px]"} line-clamp-2`}>{task.description}</p>
+      {editing ? (
+        <div className="mt-1.5 flex flex-col gap-1">
+          <textarea
+            value={draftDesc}
+            onChange={(e) => setDraftDesc(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}
+            placeholder="Add a description…"
+            rows={2}
+            className="w-full bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-none"
+          />
+          <div className="flex gap-1 justify-end">
+            <button onClick={cancel} className="text-[10px] text-gray-500 hover:text-gray-300 px-1.5 py-0.5 rounded">Cancel</button>
+            <button onClick={commit} className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded">Save</button>
+          </div>
+        </div>
+      ) : (
+        task.description && (
+          <p
+            onClick={startEditing}
+            className={`text-gray-500 hover:text-gray-400 mt-1 ${compact ? "text-[10px]" : "text-[11px]"} line-clamp-2 cursor-pointer`}
+            title="Click to edit"
+          >
+            {task.description}
+          </p>
+        )
       )}
     </div>
   );

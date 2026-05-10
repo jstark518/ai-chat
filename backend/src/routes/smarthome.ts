@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import {
   updateLight, updateLightRoom,
   getThermostat, updateThermostat,
-  getLocks, updateLock,
   getSensors, updateSensor,
   getScenes, getScene,
   getGoveeDevice, updateGoveeDeviceRoom, updateGoveeDeviceState,
@@ -28,7 +27,7 @@ smarthome.get("/api/smarthome/state", (c) => {
   return c.json({
     lights: getAllUnifiedLights(),
     thermostats: current ? [current] : [],
-    locks: getLocks(),
+    locks: [],
     sensors: getSensors(),
     scenes: getScenes(),
   });
@@ -134,16 +133,6 @@ smarthome.put("/api/smarthome/thermostat", async (c) => {
   const therm = updateThermostat(body);
   if (!therm) return c.json({ error: "No thermostat configured" }, 404);
   return c.json(therm);
-});
-
-// --- Locks ---
-smarthome.put("/api/smarthome/locks/:id", async (c) => {
-  const id = c.req.param("id");
-  const body = await c.req.json<{ locked: boolean }>();
-  log(`[routes] PUT /api/smarthome/locks/${id}`, JSON.stringify(body));
-  const lock = updateLock(id, body.locked);
-  if (!lock) return c.json({ error: "Lock not found" }, 404);
-  return c.json(lock);
 });
 
 // --- Sensors ---

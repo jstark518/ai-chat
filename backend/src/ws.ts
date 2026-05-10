@@ -6,12 +6,10 @@ const clients = new Set<WSContext>();
 
 export function addClient(ws: WSContext) {
   clients.add(ws);
-  log(`[ws] Client added (${clients.size} total)`);
 }
 
 export function removeClient(ws: WSContext) {
   clients.delete(ws);
-  log(`[ws] Client removed (${clients.size} total)`);
 }
 
 export function broadcast(message: Message) {

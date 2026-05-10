@@ -34,6 +34,8 @@ interface AgentConfig {
   replyModel: string;
   proactiveModel: string;
   dreamModel: string;
+  codePrompt: string;
+  codeModel: string;
   nextTickAt: number | null;
   running: boolean;
   // back-compat aliases
@@ -165,7 +167,7 @@ export function AgentDebugPanel() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [callbacks, setCallbacks] = useState<Callback[]>([]);
   const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
-  const [config, setConfig] = useState<AgentConfig>({ intervalMs: 30000, replyPrompt: "", proactivePrompt: "", dreamPrompt: "", replyModel: "claude-sonnet-4-6", proactiveModel: "claude-sonnet-4-6", dreamModel: "claude-sonnet-4-6", nextTickAt: null, running: false, systemPrompt: "", model: "", tickModel: "" });
+  const [config, setConfig] = useState<AgentConfig>({ intervalMs: 30000, replyPrompt: "", proactivePrompt: "", dreamPrompt: "", codePrompt: "", replyModel: "claude-sonnet-4-6", proactiveModel: "claude-sonnet-4-6", dreamModel: "claude-sonnet-4-6", codeModel: "claude-sonnet-4-6", nextTickAt: null, running: false, systemPrompt: "", model: "", tickModel: "" });
   const [countdown, setCountdown] = useState<string>("");
   const [replyDraft, setReplyDraft] = useState("");
   const [replyDirty, setReplyDirty] = useState(false);
@@ -177,6 +179,10 @@ export function AgentDebugPanel() {
   const [dreamDirty, setDreamDirty] = useState(false);
   const [dreamSaving, setDreamSaving] = useState(false);
   const [dreamRunning, setDreamRunning] = useState(false);
+  const [codeDraft, setCodeDraft] = useState("");
+  const [codeDirty, setCodeDirty] = useState(false);
+  const [codeSaving, setCodeSaving] = useState(false);
+  const [codeRunning, setCodeRunning] = useState(false);
   const [newMemory, setNewMemory] = useState("");
   const [newMemoryCategory, setNewMemoryCategory] = useState("general");
   const [showDeletedMemories, setShowDeletedMemories] = useState(false);
@@ -201,6 +207,7 @@ export function AgentDebugPanel() {
     if (!replyDirty) setReplyDraft(cfg.replyPrompt);
     if (!proactiveDirty) setProactiveDraft(cfg.proactivePrompt);
     if (!dreamDirty) setDreamDraft(cfg.dreamPrompt);
+    if (!codeDirty) setCodeDraft(cfg.codePrompt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDeletedMemories]);
 
@@ -347,8 +354,25 @@ export function AgentDebugPanel() {
   const runDream = async () => {
     setDreamRunning(true);
     await fetch("/api/agent/dream", { method: "POST" });
-    // Don't wait for completion — it runs in background
     setTimeout(() => { setDreamRunning(false); refresh(); }, 3000);
+  };
+
+  const saveCodePrompt = async () => {
+    setCodeSaving(true);
+    await fetch("/api/agent/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codePrompt: codeDraft }),
+    });
+    setCodeDirty(false);
+    setCodeSaving(false);
+    refresh();
+  };
+
+  const runCodeReview = async () => {
+    setCodeRunning(true);
+    await fetch("/api/agent/code-review", { method: "POST" });
+    setTimeout(() => { setCodeRunning(false); refresh(); }, 3000);
   };
 
   return (
@@ -407,6 +431,24 @@ export function AgentDebugPanel() {
         <p className="text-[10px] text-gray-500 mt-1">Runs daily at 3 AM. Reviews the day, consolidates memories, and can edit all three prompts.</p>
       </div>
 
+      {/* Code Agent Prompt */}
+      <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-300">🔧 Code Agent Prompt</h3>
+          <div className="flex items-center gap-2">
+            {codeDirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+            <button onClick={saveCodePrompt} disabled={!codeDirty || codeSaving} className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors">
+              {codeSaving ? "Saving..." : "Save"}
+            </button>
+            <button onClick={runCodeReview} disabled={codeRunning || config.running} className="px-3 py-1 text-xs bg-teal-600 hover:bg-teal-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors">
+              {codeRunning ? "🔧 Running..." : "Run Now"}
+            </button>
+          </div>
+        </div>
+        <textarea value={codeDraft} onChange={(e) => { setCodeDraft(e.target.value); setCodeDirty(true); }} rows={4} placeholder="Code agent prompt..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono resize-y" />
+        <p className="text-[10px] text-gray-500 mt-1">Runs daily at 9 AM. Reads agent history for bugs, makes targeted code fixes, and sends a summary.</p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:h-[480px]">
         {/* Config */}
         <div className="lg:col-span-3 bg-gray-800 rounded-xl p-4 border border-gray-700 overflow-y-auto">
@@ -427,6 +469,12 @@ export function AgentDebugPanel() {
             <div>
               <label className="text-xs text-gray-400 block mb-1">💤 Dream model</label>
               <select value={config.dreamModel} onChange={(e) => updateModel("dreamModel", e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
+                {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">🔧 Code model</label>
+              <select value={config.codeModel} onChange={(e) => updateModel("codeModel", e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
                 {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
             </div>
@@ -453,9 +501,18 @@ export function AgentDebugPanel() {
             </div>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Next proactive run</label>
-              <p className={`text-sm font-mono ${config.running ? "text-yellow-400" : "text-gray-200"}`}>
-                {config.running ? "⚡ Running..." : `⏱ ${countdown}`}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className={`text-sm font-mono ${config.running ? "text-yellow-400" : "text-gray-200"}`}>
+                  {config.running ? "⚡ Running..." : `⏱ ${countdown}`}
+                </p>
+                <button
+                  onClick={async () => { await fetch("/api/agent/proactive", { method: "POST" }); refresh(); }}
+                  disabled={config.running}
+                  className="px-2 py-0.5 text-[10px] bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
+                >
+                  Run Now
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -634,7 +691,12 @@ export function AgentDebugPanel() {
             const isAgentTick = tc.toolName === "[agent_tick]";
             const isCallback = tc.toolName === "[callback_fired]";
             const isDreamText = tc.toolName === "[dream_text]";
+            const isReplyText = tc.toolName === "[reply_text]";
+            const isProactiveText = tc.toolName === "[proactive_text]";
+            const isCodeText = tc.toolName === "[code_text]";
+            const isAgentText = isDreamText || isReplyText || isProactiveText || isCodeText;
             const isDreamMeta = tc.toolName === "[dream_mode]" || tc.toolName === "[dream_result]" || tc.toolName === "[dream_error]";
+            const isCodeMeta = tc.toolName === "[code_mode]" || tc.toolName === "[code_result]" || tc.toolName === "[code_error]";
             const isSystem = isAgentTick || isCallback;
             const args = tc.arguments as Record<string, unknown>;
 
@@ -646,17 +708,29 @@ export function AgentDebugPanel() {
                     isAgentTick ? "text-yellow-500" :
                     isCallback ? "text-orange-400" :
                     isDreamText ? "text-purple-400" :
+                    isReplyText ? "text-blue-400" :
+                    isProactiveText ? "text-amber-400" :
+                    isCodeText ? "text-teal-400" :
                     isDreamMeta ? "text-purple-500" :
+                    isCodeMeta ? "text-teal-500" :
                     "text-blue-400"
                   }`}>
                     {isAgentTick ? `⚡ tick #${args.tickCount} (${args.trigger})` :
                      isCallback ? `🔔 callback` :
                      isDreamText ? `💭 dream` :
+                     isReplyText ? `💬 reply` :
+                     isProactiveText ? `⚡ proactive` :
+                     isCodeText ? `🔧 code` :
                      tc.toolName}
                   </span>
                 </div>
-                {isDreamText ? (
-                  <div className="ml-16 mt-1 mb-2 text-gray-200 font-sans text-xs leading-relaxed border-l-2 border-purple-800/50 pl-3">
+                {isAgentText ? (
+                  <div className={`ml-16 mt-1 mb-2 text-gray-200 font-sans text-xs leading-relaxed border-l-2 pl-3 ${
+                    isDreamText ? "border-purple-800/50" :
+                    isReplyText ? "border-blue-800/50" :
+                    isCodeText ? "border-teal-800/50" :
+                    "border-amber-800/50"
+                  }`}>
                     {renderMarkdown(String(args.text ?? ""))}
                   </div>
                 ) : !isAgentTick && (
@@ -664,7 +738,7 @@ export function AgentDebugPanel() {
                     {JSON.stringify(tc.arguments, null, 2)}
                   </div>
                 )}
-                {tc.result && !isSystem && !isDreamText && (
+                {tc.result && !isSystem && !isAgentText && (
                   <div className="ml-16 text-emerald-600 break-all whitespace-pre-wrap">→ {tc.result}</div>
                 )}
                 {isCallback && (
